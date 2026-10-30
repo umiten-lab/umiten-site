@@ -141,6 +141,17 @@ img{max-width:100%}
   .day{min-height:111px}
 }
 @media (max-width:360px){.size{font-size:clamp(23px,6.6vw,28px)}.rating-guide{gap:6px 9px}}
+
+/* 茨城弁の長めの評価コメントをスマホでも収める */
+.score-summary{width:fit-content;align-items:center}
+.score-copy{min-width:0}
+.score-copy strong{overflow-wrap:anywhere;line-height:1.35}
+.rating-guide{align-items:flex-start}
+@media(max-width:760px){
+ .score-summary{max-width:100%;min-width:0}
+ .score-copy strong{font-size:14px}
+ .rating-key{max-width:100%;font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -164,11 +175,11 @@ function sz(a){
 
 // 総合評価: 予測スコア (0–100) から5段階へ。境界値は暫定値。
 const RATING_LEVELS = [
-  {min:85, mark:'◎', label:'最高', key:'excellent', range:'85〜100点'},
-  {min:70, mark:'○', label:'良好', key:'good', range:'70〜84点'},
-  {min:55, mark:'△', label:'まずまず', key:'fair', range:'55〜69点'},
-  {min:40, mark:'▼', label:'今ひとつ', key:'weak', range:'40〜54点'},
-  {min:0, mark:'×', label:'厳しい', key:'poor', range:'0〜39点'}
+  {min:85, mark:'◎', label:'いやどうも、最高だっぺ！', key:'excellent', range:'85〜100点'},
+  {min:70, mark:'○', label:'いがっぺ！', key:'good', range:'70〜84点'},
+  {min:55, mark:'△', label:'まあまあだっぺ', key:'fair', range:'55〜69点'},
+  {min:40, mark:'▼', label:'ちっと厳しいな', key:'weak', range:'40〜54点'},
+  {min:0, mark:'×', label:'今日はやめっぺ', key:'poor', range:'0〜39点'}
 ];
 function rating(score){
   if(score == null || !Number.isFinite(Number(score))) return {mark:'—',label:'データなし',key:'unknown',range:''};
@@ -186,7 +197,7 @@ function scoreBadge(score, display){
 function scoreGuide(){
   return '<div class="rating-guide" aria-label="総合予報スコアの5段階評価"><span class="rating-guide-title">総合スコアの目安</span>' +
     RATING_LEVELS.map(r => '<span class="rating-key score-level--' + r.key + '"><b class="rating-mark">' + r.mark + '</b> ' + r.label + ' <span class="rating-range">' + r.range + '</span></span>').join('') +
-    '</div><p class="rating-explain">※評価基準は試験運用中。波高・風による面・周期を組み合わせた簡易スコアです。</p>';
+    '</div><p class="rating-explain">※試験運用中の簡易評価だっぺ。風向き・風速と面を最優先。オンショアとサイドオンは厳しめに減点します。</p>';
 }
 function dir16(d){ return d == null ? '--' : DIRS[Math.round((((d%360)+360)%360)/22.5)%16]; }
 function fmt(v,n){ return v == null ? '--' : Number(v).toFixed(n); }
