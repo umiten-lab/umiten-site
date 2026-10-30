@@ -90,12 +90,51 @@ def surface_quality(wqs, up=LAG_UP, down=LAG_DOWN):
         out.append(prev)
     return out
 
-def score(a, per, q):
-    """風(面)を最重視。サイズ30点、面55点、周期15点。波が小さい日は面と周期の点を割り引く。"""
-    if a is None or q is None:
+def wind_score_cap(kind, spd):
+    """現在の風向・風速から、その時間帯のスコア上限を設定する。
+
+    面の良さ Q は過去の風を考慮するが、現在オンショアに変わった場合に
+    古い良好な Q だけで高得点にならないようにする。試験的な経験則。
+    """
+    if kind is None or spd is None:
         return None
-    pp = 15 if per >= 8 else 8 if per >= 6 else 0
-    return round(min(a, 1.5) / 1.5 * 30 + (q * 55 + pp) * min(1, a / 0.4))
+    if spd <= 1.5:  # ほぼ無風。風向きの影響は小さい
+        return 100
+    base = {"off": 100, "sideoff": 82, "side": 58, "sideon": 42, "on": 35}[kind]
+    if spd < 3.0:  # 1.5〜3 m/s の間は方位による上限を徐々に効かせる
+        return round(100 - (100 - base) * (spd - 1.5) / 1.5)
+    # 風速が強くなるほど減点。オンショア・サイドオンを特に厳しくする。
+    start, loss, floor = {
+        "off": (8.0, 4.0, 65),
+        "sideoff": (6.0, 4.0, 50),
+        "side": (4.0, 4.0, 30),
+        "sideon": (3.0, 5.0, 15),
+        "on": (2.0, 6.0, 10),
+    }[kind]
+    return max(floor, round(base - loss * max(0.0, spd - start)))
+
+
+def score(a, per, q, kind=None, spd=None):
+    """波の総合スコア(0–100)。風・面70点、サイズ20点、周期10点。
+
+    方向による厳しい上限を設け、オンショアで高得点になりにくい仕様。
+    試験的な経験則であり、観測・サーフィン記録による検証は未実施。
+    """
+    if a is None or q is None or kind is None or spd is None:
+        return None
+    a = max(0.0, a)
+    q = max(0.0, min(1.0, q))
+    period_points = 10 if per >= 10 else 7 if per >= 8 else 3 if per >= 6 else 0
+    # サイズ不足の日は面・周期の得点も抑制
+    height_factor = min(1.0, (a / 0.6) ** 1.25)
+    raw = min(1.5, a) / 1.5 * 20 + (q * 70 + period_points) * height_factor
+    # 小波の過大評価を防ぐ上限。幅広い板向けには別途チューニング余地がある。
+    size_cap = (40 if a < 0.35 else
+                60 if a < 0.50 else
+                75 if a < 0.65 else
+                100)
+    cap = wind_score_cap(kind, spd)
+    return max(0, min(100, round(min(raw, size_cap, cap))))
 
 def forecast(p):
     q = urllib.parse.urlencode({"latitude": p["lat"], "longitude": p["lon"], "timezone": "Asia/Tokyo", "forecast_days": 7})
@@ -139,7 +178,7 @@ def forecast(p):
         kind = wind_kind(wd, facing)
         tide, nxt = g("sea_level_height_msl"), (m["sea_level_height_msl"][i + 1] if i + 1 < len(m["time"]) else None)
         rows.append({"t": t, "h": tot, "a": round(a, 2), "per": top[1], "wdir": top[2], "sst": g("sea_surface_temperature"),
-                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t)), "q": round(Q[t], 2) if Q.get(t) is not None else None,
+                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd), "q": round(Q[t], 2) if Q.get(t) is not None else None,
                      "tmp": x["temperature_2m"][xi[t]] if x and t in xi else None, "wx": x["weather_code"][xi[t]] if x and t in xi else None,
                      "wv": [g("wave_height"), g("wave_period"), g("wave_direction")], "ww": [g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction")],
                      "sw": [g("swell_wave_height"), g("swell_wave_period"), g("swell_wave_direction")], "sw2": [g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")],
