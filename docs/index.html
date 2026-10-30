@@ -596,6 +596,9 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 
 /* 潮位図も波高図と同じ横幅の時間軸にし、スマホで時刻と「いま」を読めるようにする。 */
 .tide-graph{width:1016px;max-width:none;height:164px}
+/* ポイント名の長さに関わらず「〜の予報」と日時を必ず2行に分ける。 */
+.forecast-lead-title{display:block;font-weight:700;line-height:1.45}
+.forecast-lead-detail{display:block;margin-top:3px;color:var(--sub);font-size:.91em;line-height:1.55}
 </style>
 </head>
 <body>
@@ -727,29 +730,54 @@ function bestRecommendation(rows, now){
 }
 // 今日の残り時間についてだけ判断する。明日や日没後の高得点は勧めない。
 // 総合評価の記号と点数は別に常時表示する。
+// 日没後も波そのもののスコアは減点しない。
+// 海況の評価と「入水を勧められるか」は別概念として扱う。
+// 予報時刻(jstNow)は時間単位なので、明暗判定だけは実際のJST時刻(分単位)を使う。
+function daylightStatus(now, p=POINTS[state.pi]){
+  if(!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lon)) return 'unknown';
+  const local = new Date().toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'});
+  // 本日のみ評価。「別の日付の予報」では現在の明暗を流用しない。
+  if(local.slice(0,10) !== now.slice(0,10)) return 'unknown';
+  const minute = Number(local.slice(11,13))*60 + Number(local.slice(14,16));
+  const [rise,set] = sun(now.slice(0,10), +p.lat, +p.lon);
+  if(!Number.isFinite(rise) || !Number.isFinite(set)) return 'unknown';
+  if(minute < rise*60) return 'before-sunrise';
+  if(minute >= set*60) return 'after-sunset';
+  return 'daylight';
+}
 function adviceFor(current, rows, now){
   const today = now.slice(0,10);
+  const currentScore = boardScore(current);
+  const light = daylightStatus(now);
+  // 夜は×にするのではなく、波の総合点はそのまま保持する。
+  // 総合欄のコメントだけ、安全上の理由で入水は勧めない表現に変える。
+  if(light === 'after-sunset'){
+    if(currentScore != null && currentScore >= 70) return 'いやどうも！ 波はいいんだけど、もう真っ暗だな。今日はやめとくべ。';
+    if(currentScore != null && currentScore >= 55) return '波はまずまず。でも、もう暗いな。今日はやめとくべ。';
+    return 'もう暗くなったな。波の評価はそのまま、入るのはまた明日だな。';
+  }
   const upcoming = rows.filter(r => r.t.slice(0,10) === today &&
     r.t >= now && isSafeDaylightHour(r) && boardScore(r) != null);
-  if(!upcoming.length) return '今日はもうやめとくべ。また次だな。';
+  if(!upcoming.length) return light === 'before-sunrise' ?
+    'まだ暗いな。明るくなってからの予報を見てみっぺ。' :
+    '今日はもう入れる時間がなさそうだな。また次だな。';
   const best = bestOf(upcoming), bestScore = boardScore(best);
   if(bestScore < 40) return '日没まで厳しそうだな。今日はやめとくべ。';
   if(bestScore < 55) return 'ちっとはできっかもしんねえけど、無理しねえ方がいいな。';
-
   const currentEligible = current && current.t.slice(0,10) === today &&
     current.t >= now && isSafeDaylightHour(current);
-  const currentScore = currentEligible ? boardScore(current) : null;
+  const scoreNow = currentEligible ? currentScore : null;
   const bestHour = hourOf(best.t) + '時ごろ';
-  // △以上なら良い時間帯。現時点で十分良ければ無理に「待て」とは言わない。
-  if(currentScore != null && currentScore >= 55 &&
-     (best === current || bestScore < currentScore + 9)) {
-    return currentScore >= 70 ? '今が狙い目だな。海さ行ぐべ！' :
+  if(scoreNow != null && scoreNow >= 55 &&
+     (best === current || bestScore < scoreNow + 9)) {
+    return scoreNow >= 85 ? 'いやどうも！ こりゃ最高だな。今が狙い目だ。' :
+      scoreNow >= 70 ? 'いやどうも！ 今が狙い目だな。' :
       'まずまずだな。入るなら今でも悪ぐねえ。';
   }
   if(!currentEligible || best.t > current.t){
     return bestHour + 'が良さそうだな。もうちっと待ってみっぺ。';
   }
-  return bestScore >= 70 ? '今が狙い目だな。海さ行ぐべ！' :
+  return bestScore >= 70 ? 'いやどうも！ 今が狙い目だな。' :
     '今なら、まずまずできそうだな。';
 }
 function recommendView(rows, now){
@@ -1010,7 +1038,7 @@ function view(p, rows){
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestRecommendation(d.rows, now), ref = dailyRatingRow(d.rows), rated = b || ref;
     const status = b ? 'おすすめ ' + hourOf(b.t) + '時・' + boardScore(b) + '点' : 'おすすめ枠なし' + (ref ? '／' + (isSafeDaylightHour(ref) ? '日中最高' : '参考') + ' ' + boardScore(ref) + '点' : '／予報データなし');
     return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + scoreBadge(boardScore(rated), 'day') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + status + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + (p.map_url ? ' <a class="spot-map" href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">地図を見る ↗</a>' : '') + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
+  return '<div class="wrap"><section class="now"><div><p class="lead"><span class="forecast-lead-title">' + p.name + ' の予報</span><span class="forecast-lead-detail">' + forecastTime(r.t) + (p.map_url ? ' <a class="spot-map" href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">地図を見る ↗</a>' : '') + '</span></p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
     '<dl class="stats"><div><dt>' + statIcon('shore') + '岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>' + statIcon('offshore') + '沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>' + statIcon('period') + '周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +

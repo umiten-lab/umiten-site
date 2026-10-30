@@ -251,7 +251,13 @@ def wind_score_cap(kind, spd):
     面の良さ Q は過去の風を考慮するが、現在オンショアに変わった場合に
     古い良好な Q だけで高得点にならないようにする。試験的な経験則。
     """
-    if kind is None or spd is None:
+    if spd is None or not math.isfinite(float(spd)):
+        return None
+    # 風向が欠測していても、0.5m/s以下なら影響が十分小さいので減点不要。
+    # 風向欠測の有風時は推測せず欠測扱いとする。
+    if spd <= 0.5:
+        return 100
+    if kind is None:
         return None
     if spd <= 1.5:  # ほぼ無風。風向きの影響は小さい
         return 100
@@ -269,12 +275,66 @@ def wind_score_cap(kind, spd):
     return max(floor, round(base - loss * max(0.0, spd - start)))
 
 
-# 日本式の波サイズ表記(当サイトの簡易岸波高に対応させた暫定値)
-# ショートは胸〜肩(中心1.35 m)、ロングは腹〜胸(中心1.08 m)。
+# 日本式の波サイズ表記に合わせた「板種ごとのサイズ適性」。
+# 各サイズ名と岸の波高の対応はサイト独自の暫定値であり、現地の波の実測ではない。
+#
+# 【ショート】コシ(0.70m)〜アタマ(1.90m未満)を良い波の範囲に広げる。
+#   ・ハラ〜カタ(0.90〜1.50m)は特に高く評価する。
+#   ・コシの下限は「まずまず」から始まり、波が大きくなると徐々に高評価。
+#   ・アタマ付近も良好だが、1.90m以上は上級者向けとして別途抑制する。
+#   ・点を結ぶときはsmoothstep補間を使い、境界でギザギザにならないようにする。
+# 【ロング】従来のハラ〜ムネ中心のガウス型を維持する。
+SHORT_SIZE_FIT_POINTS = (
+    (0.00, 0.00), (0.30, 0.10), (0.50, 0.28),
+    (0.70, 0.73), (0.90, 0.96), (1.10, 1.00),
+    (1.50, 1.00), (1.70, 0.97), (1.90, 0.87),
+    (2.15, 0.56), (2.50, 0.18), (3.00, 0.03),
+)
 BOARD_PROFILES = {
-    "short": {"mu": 1.35, "sigma": 0.48},
+    "short": {"range_m": (0.70, 1.90), "fit_points": SHORT_SIZE_FIT_POINTS},
     "long":  {"mu": 1.08, "sigma": 0.38},
 }
+
+
+def smoothstep(x):
+    """0〜1の範囲で、端点の傾きが0になる補間係数。"""
+    u = clamp(x, 0.0, 1.0)
+    return u * u * (3.0 - 2.0 * u)
+
+
+def short_size_cap(height):
+    """ショートのサイズ上限。風・周期・面が良くてもサイズだけで過大評価しない。
+
+    スネ〜モモは従来どおり最大39点で、おすすめ候補にはしない。
+    コシの下限0.70mで最大55点（△）とし、0.90mまで滑らかに100点へ。
+    1.90m以上（アタマオーバー）は技量・危険性の注意喚起に合わせ上限を下げる。
+
+    ※0.70mは「モモ→コシ」の区分が変わるため、ここだけ上限が39→55へ移る。
+      等級境界を越える瞬間の小さな段差は意図的。現地の確実な閾値ではない。
+    """
+    if height < 0.35:
+        return 25
+    if height < 0.50:
+        return 35
+    if height < 0.70:
+        return 39
+    if height < 0.90:
+        return 55 + 45 * smoothstep((height - 0.70) / 0.20)
+    if height < 1.90:
+        return 100
+    # 1.90mで84点を上限にし、2.50m以上では49点まで抑制。
+    return 84 - 35 * smoothstep((height - 1.90) / 0.60)
+
+
+def size_score_cap(height, board):
+    """点数上限。ロングの従来のサイズ閾値は変更しない。"""
+    if board == "short":
+        return short_size_cap(height)
+    return (25 if height < 0.35 else
+            35 if height < 0.50 else
+            39 if height < 0.70 else
+            69 if height < 0.90 else
+            83 if height < 1.00 else 100)
 
 
 # 風向の正規分布型評価（角度はオフショア中心からのずれ）。
@@ -303,42 +363,76 @@ def offshore_suitability(frm, facing, spd, board="short"):
 
 
 def size_suitability(a, board="short"):
-    """正規分布の指数部を利用したサイズ適合度 (0–1)。統計的な確率ではない。"""
+    """サイズ適合度(0〜1)。ショートは広い台形型、ロングは従来のガウス型。
+
+    ここでの「適合度」は確率ではなく、予報スコア用の経験的な係数。
+    ショートはコシ〜アタマを高めに評価するため、複数の制御点で形を決める。
+    各点間は滑らかに補間し、例えばムネからカタへの移行で点数が急変しない。
+    """
     if a is None:
         return None
+    height = max(0.0, float(a))
+    if board == "short":
+        pts = SHORT_SIZE_FIT_POINTS
+        if height <= pts[0][0]:
+            return pts[0][1]
+        for (h0, y0), (h1, y1) in zip(pts, pts[1:]):
+            if height <= h1:
+                weight = smoothstep((height - h0) / (h1 - h0))
+                return y0 + (y1 - y0) * weight
+        return pts[-1][1]
     profile = BOARD_PROFILES[board]
-    return math.exp(-0.5 * ((max(0.0, a) - profile["mu"]) / profile["sigma"]) ** 2)
+    return math.exp(-0.5 * ((height - profile["mu"]) / profile["sigma"]) ** 2)
 
 
 def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=None):
-    """板種別の波予報スコア（暫定）：面/風70・サイズ20・周期10。
+    """厳しめに校正したショート/ロング共通の総合点 (0〜100)。
 
-    サイズ適合度（m）とオフショア中心の風向適合度（度）に
-    別々のガウス関数を用いる。ロングは風向分布を鋭く、
-    ショートはやや広くし、ロングの横風評価を過度に厳しくしない。
+    目安: ◎=85+, ○=70+, △=55+, ▼=40+, ×=0〜39。
+    この閾値は変更せず、「実際に条件がかなり揃った時だけ○になる」ように
+    **基礎点側**を調整する。一定割合の日だけ○を出すような順位操作はしない。
+
+    基本計算（風の適性や上限の前）:
+      F = 波サイズの適合度 [0,1]（ショートはコシ〜アタマ、ロングは従来通り）
+      Q = 面の整い具合 [0,1]（過去の風の履歴を考慮した値）
+      P = 期間別の点数 [0,10]
+      S_0 = (70 * Q**2.2 + 20 * F + P) * (0.35 + 0.65*F) * 0.92
+
+    【厳格化の根拠と限界】
+    - Q**2.2: 面が中途半端に整っている状態では点を出しにくくする。
+      例: Q=0.75なら0.75**2.2≒0.53となり、面の配点は約37点。
+      Q=0.96でも約0.91なので、◎にはサイズ・周期・風向も必要。
+    - 0.92: 全体の過大評価を減らす経験的な減衰係数。
+      実測から推定した値ではないので、○の出現頻度は実際のデータで要検証。
+    - 風向係数と風速上限: どんなにQが良くても強いオンショアで高得点にしない。
+    - 周期の上限: 6秒未満は最大49点、6〜8秒未満は最大69点。
+      8秒以上でも他の条件が揃わない限り高評価にはならない。
+    - 日の出/日没は **この式には入れない**。夜でも良い波は良い点数。
+      入水可能かどうかの判定はWeb画面で別に行う。
+
+    なお、得点は経験則に基づく予報の目安で、海上安全の保証ではない。
     """
-    if a is None or q is None or kind is None or spd is None:
+    # 欠測を×（0点）に変換しない。0m/sの無風だけは風向不明でも許容。
+    if any(v is None for v in (a, per, q, spd)):
         return None
-    a = max(0.0, a)
-    q = max(0.0, min(1.0, q))
+    if not all(math.isfinite(float(v)) for v in (a, per, q, spd)) or per <= 0:
+        return None
+    if kind is None and spd > 0.5:
+        return None
+    a = max(0.0, float(a))
+    q = clamp(float(q), 0.0, 1.0)
     fit = size_suitability(a, board)
     period_points = 10 if per >= 10 else 7 if per >= 8 else 3 if per >= 6 else 0
-    base = 70 * q + 20 * fit + period_points
-    raw = base * (0.35 + 0.65 * fit)
-
-    # 加算式での過大評価を避け、風向の「角度」も連続的に評価する。
-    # ほぼ無風では方位を優劣の根拠にしない。
+    raw = (70 * q ** 2.2 + 20 * fit + period_points) * (0.35 + 0.65 * fit) * 0.92
+    # 無風またはほぼ無風のときは風向欠測を評価に使わず、角度減点しない。
     alignment = offshore_suitability(wind_dir, facing, spd, board)
     if alignment is not None:
         raw *= alignment
-
-    size_cap = (25 if a < 0.35 else
-                35 if a < 0.50 else
-                39 if a < 0.70 else
-                69 if a < 0.90 else
-                83 if a < 1.00 else 100)
-    period_cap = 59 if per < 6 else 79 if per < 8 else 100
+    size_cap = size_score_cap(a, board)
+    period_cap = 49 if per < 6 else 69 if per < 8 else 100
     wind_cap = wind_score_cap(kind, spd)
+    if wind_cap is None:
+        return None
     return max(0, min(100, round(min(raw, size_cap, period_cap, wind_cap))))
 
 
@@ -426,13 +520,20 @@ def forecast(p):
                  (g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")),
                  (g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction"))]
         comps = [c for c in comps if c[0]]
-        tot = g("wave_height") or 0
-        rest = math.sqrt(max(0.0, tot * tot - sum(c[0] ** 2 for c in comps)))   # 上の3成分に入らない残り
+        # 波高の欠測(None)と実際の0mを混同しない。欠測を0m扱いすると
+        # 「データがないだけなのに×評価」が起こるため、ここで区別する。
+        tot = g("wave_height")
+        rest = math.sqrt(max(0.0, tot * tot - sum(c[0] ** 2 for c in comps))) if tot is not None else 0.0
         if rest > 0.05:
             comps.append((rest, g("wave_period"), g("wave_direction")))
         shore = [(to_shore(h, T, d, facing, depth), T, d) for h, T, d in comps]
-        a = scale * math.sqrt(sum(s[0] ** 2 for s in shore)) if shore else 0.0
+        a = (scale * math.sqrt(sum(s[0] ** 2 for s in shore)) if shore else 0.0) if tot is not None else None
         top = max(shore, key=lambda s: s[0]) if shore else (0, g("wave_period"), g("wave_direction"))
+        # 主成分の周期が欠測しても全波の周期がある場合はそちらを使う。
+        # 両方なければ「0秒の短周期」と偽らず、総合点を欠測にする。
+        period = top[1] if top[1] is not None and top[1] > 0 else g("wave_period")
+        if period is not None and period <= 0:
+            period = None
         j = wi.get(t)
         spd = w["wind_speed_10m"][j] if j is not None else None
         wd = w["wind_direction_10m"][j] if j is not None else None
@@ -441,8 +542,12 @@ def forecast(p):
         state_value = Q.get(t, (None, None, None))
         q_actual, q_target, q_tau = state_value
         tide, nxt = g("sea_level_height_msl"), (m["sea_level_height_msl"][i + 1] if i + 1 < len(m["time"]) else None)
-        rows.append({"t": t, "h": tot, "a": round(a, 2), "per": top[1], "wdir": top[2], "sst": g("sea_surface_temperature"),
-                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, q_actual, kind, spd, "short", wd, facing), "score_short": score(a, top[1] or 0, q_actual, kind, spd, "short", wd, facing), "score_long": score(a, top[1] or 0, q_actual, kind, spd, "long", wd, facing),
+        # 採点はショート/ロングそれぞれ1回ずつ。表示箇所に応じて採点を
+        # 繰り返すと、後で式が分岐した際に値が不一致になるため避ける。
+        short_score = score(a, period, q_actual, kind, spd, "short", wd, facing)
+        long_score = score(a, period, q_actual, kind, spd, "long", wd, facing)
+        rows.append({"t": t, "h": tot, "a": round(a, 2) if a is not None else None, "per": period, "wdir": top[2], "sst": g("sea_surface_temperature"),
+                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": short_score, "score_short": short_score, "score_long": long_score,
                      "q": round(q_actual, 3) if q_actual is not None else None,
                      # 検証用: HTMLは無視してよいが、時系列でタイムラグを確認できる。
                      "q_target": round(q_target, 3) if q_target is not None else None,
