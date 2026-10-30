@@ -60,6 +60,46 @@ svg{display:block;width:100%;height:auto}
 .tbw{overflow-x:auto}.tb{border-collapse:collapse;width:100%;min-width:860px;font-size:13px}.tb th{color:var(--sub);font-weight:400;padding:6px 8px;text-align:center;border-bottom:1px solid var(--line)}.tb td{padding:6px 8px;text-align:center;border-bottom:1px solid var(--line);white-space:nowrap}.tb small{color:var(--sub);margin-left:4px}.tb tr.nt td{color:var(--sub);background:rgba(169,187,209,.08)}
 footer{max-width:1120px;margin:0 auto;padding:32px 24px 48px;color:var(--sub);font-size:12px}
 @media (max-width:760px){.now{grid-template-columns:1fr}.hero>img{width:100%;opacity:.5}}
+
+/* Small-screen refinements: keep wave tables scrollable instead of crushing data. */
+.size{font-size:clamp(52px,8vw,96px);overflow-wrap:anywhere}
+.panel,.tbw{min-width:0;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+img{max-width:100%}
+.scroll-hint{display:none}
+@media (max-width:760px){
+  .wrap{padding-left:16px;padding-right:16px;min-width:0}
+  .hero>img{width:100%;opacity:.24;object-position:center;pointer-events:none}
+  .top{padding-top:12px}
+  .top .logo{height:auto;width:min(192px,64vw);max-height:90px;object-fit:contain}
+  .tabs{gap:8px;padding-top:10px}
+  .tabs button{min-height:44px;max-width:100%;white-space:normal;padding:9px 15px;line-height:1.4}
+  .now{gap:18px;padding-top:12px;padding-bottom:28px;min-width:0}
+  .size{font-size:clamp(34px,9vw,68px);line-height:1.25;overflow-wrap:anywhere}
+  .lead{font-size:14px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .stats dd{font-size:16px;overflow-wrap:anywhere}
+  .stats .kind{margin-left:0;margin-top:4px}
+  .compass{max-width:420px;width:100%;justify-self:center;padding:12px}
+  .compass svg{max-width:285px;margin:0 auto}
+  .week{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .day{padding:10px;min-width:0;min-height:90px}
+  .day b{font-size:17px;overflow-wrap:anywhere}
+  .panel{padding:12px 10px 14px;border-radius:12px}
+  .chart{min-width:760px}
+  .scroll-hint{display:block;margin:0 0 8px;color:var(--sub);font-size:12px}
+  .panel > .scroll-hint{position:sticky;left:0;max-width:calc(100vw - 56px)}
+  .n{display:block;margin:5px 0 0;line-height:1.5}
+  .links a{min-height:44px;display:flex;align-items:center;padding:10px 14px}
+  footer{padding:24px 16px 38px}
+}
+@media (max-width:360px){
+  .wrap{padding-left:12px;padding-right:12px}
+  .tabs button{padding:8px 11px;font-size:13px}
+  .stats dd{font-size:15px}
+  .week{gap:6px}
+  .day{padding:9px 8px}
+  .day b{font-size:16px}
+}
 </style>
 </head>
 <body>
@@ -199,7 +239,7 @@ function view(p, rows){
     '<dl class="stats"><div><dt>岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>潮位</dt><dd>' + tide + '</dd></div><div><dt>水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><h2>1週間の見通し</h2><div class="week">' + week + '</div><h2>' + dayLabel(ds[di].date) + ' の波<small class="n">「面」の青い帯は、風の向きと強さの履歴から見た水面の良さ(濃いほど良い)</small></h2><div class="panel"><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<div class="wrap"><h2>1週間の見通し</h2><div class="week">' + week + '</div><h2>' + dayLabel(ds[di].date) + ' の波<small class="n">「面」の青い帯は、風の向きと強さの履歴から見た水面の良さ(濃いほど良い)</small></h2><div class="panel"><p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
     '<h2>潮位</h2><div class="panel">' + tideChart(ds[di].rows, now) + '</div><h2>時間ごとの詳細(2時間ごと)</h2><div class="panel">' + table(ds[di].rows) + '</div>' +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div></div>';
 }

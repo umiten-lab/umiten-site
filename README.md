@@ -1,9 +1,18 @@
-# 🌊 海点 | UMITEN
+<p align="center">
+  <a href="https://umiten-lab.github.io/umiten-site/">
+    <img src="docs/assets/umiten-readme-logo.png" width="520" alt="海点 UMITEN — SURF FORECAST & OCEAN DATA">
+  </a>
+</p>
 
-**SURF FORECAST & OCEAN DATA**  
-*海を読む。もっと自由に。*
+<h1 align="center">海点 | UMITEN</h1>
+<p align="center"><strong>SURF FORECAST & OCEAN DATA</strong></p>
+<p align="center"><em>海を読む。もっと自由に。</em></p>
 
-[**海点の波予想サイトを見る**](https://umiten-lab.github.io/umiten-site/) ｜ [GitHub Repository](https://github.com/umiten-lab/umiten-site)
+<p align="center">
+  <a href="https://umiten-lab.github.io/umiten-site/"><strong>波予想サイトを開く</strong></a>
+  ·
+  <a href="https://github.com/umiten-lab/umiten-site">GitHub Repository</a>
+</p>
 
 ---
 
@@ -34,18 +43,14 @@
 
 ## 現在利用できる機能
 
-| 機能 | 内容 |
-| --- | --- |
-| ポイント別の波予想 | 登録したサーフポイントごとにコンディションを表示 |
-| 波高・周期・方向 | 沖合の波、風波、主要うねり、第二うねりの情報を確認 |
-| 岸の波高の推定 | 波の入射方向と浅水変形・屈折を用いた簡易モデルによる推定 |
-| 風のコンディション | 風速・風向と海岸の向きからオン／オフショアなどを分類 |
-| コンディションスコア | 波のサイズ、風による海面状態、周期から参考スコアを算出 |
-| 潮位・海面水温 | 海面高度データの推移や海水温を表示 |
-| 天気・気温 | 時間帯ごとの天気と気温を表示 |
-| 時間帯別の詳細 | 2時間ごとの数値テーブルや潮位グラフを確認 |
-| 関連情報へのリンク | 天気図、台風情報、アメダス、NOWPHAS、気象庁潮位表などへアクセス |
-
+- **ポイント別の波予想** — 登録地点ごとにコンディションを表示。
+- **波浪データ** — 沖合の波高・周期・方向、風波、主要うねり、第二うねりを確認。
+- **岸の波高の推定** — 波の入射方向、簡易的な浅水変形・屈折を用いた波高推定。
+- **風のコンディション** — 風向と海岸の向きから、オンショア・オフショアなどを分類。
+- **コンディションスコア** — 波のサイズ、面の状態、周期を組み合わせた参考評価。
+- **潮位・水温・気温** — 海面高度、海面水温、気象条件を確認。
+- **時間帯別の詳細** — 波の推移、潮位グラフ、2時間ごとの詳細テーブル。
+- **外部データへのリンク** — 天気図、台風、アメダス、NOWPHAS、潮位表など。
 現在の予報取得設定は**最大7日先**を対象としています。データの提供状況により、表示可能な期間・項目は変わる場合があります。
 
 ## 対応サーフポイント
@@ -63,21 +68,13 @@
 海点の現行モデルは、外部の予報データにポイントごとの簡易補正を加える方式です。
 
 ```text
-海洋・気象予報データ
-    ├─ 沖合の波高・周期・波向
-    ├─ 主要うねり・第二うねり・風波
-    ├─ 風速・風向
-    └─ 海面水温・海面高度・気温・天気
-                 │
-                 ▼
-       ポイントごとの条件を適用
-       海岸の向き・水深・補正係数
-                 │
-                 ▼
-        岸の波高・海面状態を推定
-                 │
-                 ▼
-       時間帯別の予報・スコア表示
+気象・海洋予報データ
+      ↓
+ポイント別の補正
+      ↓
+岸の波高と海面状態を推定
+      ↓
+時間帯別の波予報・スコア
 ```
 
 ### 波高の推定
@@ -107,7 +104,7 @@ forecast.json を生成
       ↓
 GitHub Pages にWebサイトを公開
       ↓
-iPhone・PCのブラウザから閲覧
+スマートフォン・PCのブラウザから閲覧
 ```
 
 ## 今後の開発ロードマップ
@@ -130,14 +127,12 @@ iPhone・PCのブラウザから閲覧
 
 ## プロジェクト構成
 
-| ファイル・ディレクトリ | 役割 |
-| --- | --- |
-| `docs/index.html` | Webサイトの画面と表示処理 |
-| `docs/data/forecast.json` | 定期処理で生成される予報データ |
-| `scripts/forecast.py` | データ取得、波高・海面状態の簡易推定、JSON生成 |
-| `points.json` | サーフポイントの緯度・経度と補正用パラメータ |
-| `.github/workflows/update.yml` | GitHub Actionsによる予報生成・公開の自動化 |
-
+- `docs/index.html` — Webサイトの画面・表示処理。
+- `docs/assets/umiten-readme-logo.png` — Webサイトのロゴと統一した、GitHub表示用の画像。
+- `docs/data/forecast.json` — 自動処理によって生成・公開される予報データ。
+- `scripts/forecast.py` — データ取得、岸の波高・面の状態の簡易推定、JSON生成。
+- `points.json` — サーフポイントごとの位置・補正パラメータ。
+- `.github/workflows/update.yml` — GitHub Actionsによる予報生成と公開の自動化。
 **技術構成：** HTML / CSS / JavaScript / Python / GitHub Actions / GitHub Pages
 
 ## データ提供元・参考情報
@@ -162,3 +157,4 @@ iPhone・PCのブラウザから閲覧
 **UMITEN LAB — Surf Forecast & Ocean Data**
 
 [**Visit UMITEN →**](https://umiten-lab.github.io/umiten-site/)
+
