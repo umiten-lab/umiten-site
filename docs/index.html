@@ -62,7 +62,7 @@ footer{max-width:1120px;margin:0 auto;padding:32px 24px 48px;color:var(--sub);fo
 @media (max-width:760px){.now{grid-template-columns:1fr}.hero>img{width:100%;opacity:.5}}
 
 /* Small-screen refinements: keep wave tables scrollable instead of crushing data. */
-.size{font-size:clamp(52px,8vw,96px);overflow-wrap:anywhere}
+.size{font-size:clamp(36px,4.6vw,58px);line-height:1.22;letter-spacing:-.025em;overflow-wrap:anywhere}
 .panel,.tbw{min-width:0;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
 img{max-width:100%}
 .scroll-hint{display:none}
@@ -74,7 +74,7 @@ img{max-width:100%}
   .tabs{gap:8px;padding-top:10px}
   .tabs button{min-height:44px;max-width:100%;white-space:normal;padding:9px 15px;line-height:1.4}
   .now{gap:18px;padding-top:12px;padding-bottom:28px;min-width:0}
-  .size{font-size:clamp(34px,9vw,68px);line-height:1.25;overflow-wrap:anywhere}
+  .size{font-size:clamp(25px,6.8vw,34px);line-height:1.3;letter-spacing:-.02em;overflow-wrap:anywhere}
   .lead{font-size:14px}
   .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   .stats dd{font-size:16px;overflow-wrap:anywhere}
@@ -100,6 +100,47 @@ img{max-width:100%}
   .day{padding:9px 8px}
   .day b{font-size:16px}
 }
+
+/* UMITEN forecast rating: symbols supplement colors for instant scanning. */
+.score-level--excellent{--rating:#66e2bb;--rating-bg:rgba(64,194,153,.17)}
+.score-level--good{--rating:#83d5ff;--rating-bg:rgba(79,159,224,.16)}
+.score-level--fair{--rating:#ffd26c;--rating-bg:rgba(242,181,68,.17)}
+.score-level--weak{--rating:#ffae7c;--rating-bg:rgba(242,139,82,.17)}
+.score-level--poor{--rating:#ff91a0;--rating-bg:rgba(232,90,120,.18)}
+.score-level--unknown{--rating:#b3c4d9;--rating-bg:rgba(169,187,209,.12)}
+.score-summary{margin-top:12px;display:inline-flex;align-items:center;gap:10px;padding:10px 14px;
+  min-width:182px;max-width:100%;border:1px solid color-mix(in srgb,var(--rating) 50%,transparent);
+  border-radius:14px;background:var(--rating-bg)}
+.score-summary .score-symbol{font-size:37px;font-weight:750;line-height:1;color:var(--rating);min-width:37px;text-align:center}
+.score-copy{display:flex;flex-direction:column;line-height:1.35;gap:2px}
+.score-copy .score-kicker{font-size:11px;color:var(--sub)}
+.score-copy strong{font-size:16px;color:var(--text);font-weight:700}
+.score-copy .score-num{font-size:12px;color:var(--rating);font-weight:700}
+.score-mini{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;margin-top:4px;
+  border:1px solid color-mix(in srgb,var(--rating) 40%,transparent);background:var(--rating-bg);
+  padding:2px 8px;border-radius:999px;color:var(--rating);font-size:12px;line-height:1.25;font-weight:700}
+.score-mini .score-symbol{font-size:20px;line-height:1}
+.day[aria-pressed="true"] .score-mini{background:rgba(6,18,42,.12);border-color:rgba(6,18,42,.2);color:#06122a}
+.score-hour,.score-table{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;gap:1px;color:var(--rating)}
+.score-hour .score-symbol,.score-table .score-symbol{font-size:17px;line-height:1;font-weight:800}
+.score-hour .score-num{font-size:10px;font-weight:700}
+.score-table .score-symbol{font-size:21px}
+.score-table .score-num{font-size:12px}
+.rating-guide{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0 14px;align-items:center}
+.rating-guide-title{font-size:12px;color:var(--sub)}
+.rating-key{display:inline-flex;gap:4px;align-items:center;font-size:12px;white-space:nowrap}
+.rating-key .rating-mark{font-size:18px;font-weight:800;line-height:1;color:var(--rating)}
+.rating-key .rating-range{color:var(--sub);font-size:11px}
+.rating-explain{margin:0 0 10px;color:var(--sub);font-size:11px}
+@media (max-width:760px){
+  .score-summary{padding:9px 12px;margin-top:8px}
+  .score-summary .score-symbol{font-size:32px;min-width:32px}
+  .score-copy strong{font-size:15px}
+  .rating-guide{gap:7px 12px}
+  .rating-guide-title{width:100%}
+  .day{min-height:111px}
+}
+@media (max-width:360px){.size{font-size:clamp(23px,6.6vw,28px)}.rating-guide{gap:6px 9px}}
 </style>
 </head>
 <body>
@@ -119,6 +160,33 @@ function sz(a){
   if(a == null) return '--'; if(a < 0.15) return 'フラット';
   const f = x => { for(const [n,lo,hi] of BANDS) if(x < hi) return n; return 'オーバーヘッド'; };
   const lo = f(a*0.85), hi = f(a*1.15); return lo === hi ? lo : lo + '〜' + hi;
+}
+
+// 総合評価: 予測スコア (0–100) から5段階へ。境界値は暫定値。
+const RATING_LEVELS = [
+  {min:85, mark:'◎', label:'最高', key:'excellent', range:'85〜100点'},
+  {min:70, mark:'○', label:'良好', key:'good', range:'70〜84点'},
+  {min:55, mark:'△', label:'まずまず', key:'fair', range:'55〜69点'},
+  {min:40, mark:'▼', label:'今ひとつ', key:'weak', range:'40〜54点'},
+  {min:0, mark:'×', label:'厳しい', key:'poor', range:'0〜39点'}
+];
+function rating(score){
+  if(score == null || !Number.isFinite(Number(score))) return {mark:'—',label:'データなし',key:'unknown',range:''};
+  const v = Math.min(100, Math.max(0, Number(score)));
+  return RATING_LEVELS.find(x => v >= x.min);
+}
+function scoreBadge(score, display){
+  const r = rating(score), n = score == null || !Number.isFinite(Number(score)) ? '--' : Math.round(Number(score));
+  const tip = '総合予報スコア ' + n + '点：' + r.label;
+  if(display === 'hero') return '<div class="score-summary score-level--' + r.key + '" aria-label="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span><div class="score-copy"><span class="score-kicker">総合予報スコア</span><strong>' + r.label + '</strong><span class="score-num">' + n + ' / 100点</span></div></div>';
+  if(display === 'day') return '<span class="score-mini score-level--' + r.key + '" title="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span>' + n + '点</span>';
+  const cls = display === 'table' ? 'score-table' : 'score-hour';
+  return '<span class="' + cls + ' score-level--' + r.key + '" title="' + tip + '" aria-label="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span><span class="score-num">' + n + '</span></span>';
+}
+function scoreGuide(){
+  return '<div class="rating-guide" aria-label="総合予報スコアの5段階評価"><span class="rating-guide-title">総合スコアの目安</span>' +
+    RATING_LEVELS.map(r => '<span class="rating-key score-level--' + r.key + '"><b class="rating-mark">' + r.mark + '</b> ' + r.label + ' <span class="rating-range">' + r.range + '</span></span>').join('') +
+    '</div><p class="rating-explain">※評価基準は試験運用中。波高・風による面・周期を組み合わせた簡易スコアです。</p>';
 }
 function dir16(d){ return d == null ? '--' : DIRS[Math.round((((d%360)+360)%360)/22.5)%16]; }
 function fmt(v,n){ return v == null ? '--' : Number(v).toFixed(n); }
@@ -185,7 +253,7 @@ function cells(rows){
   return '<div class="grid">' + row('時刻', r => ['', hourOf(r.t)]) + row('風', r => [' style="background:' + windBg(r.kind) + '" title="' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '"', arrow(r.dir) + fmt(r.spd,0)]) +
     row('面', r => [' style="background:rgba(59,143,224,' + (.08 + .62*(r.q || 0)).toFixed(2) + ')" title="風の履歴を考えた水面の良さ"', '']) +
     row('周期', r => ['', fmt(r.per,0) + '秒']) + row('波向', r => [' title="' + dir16(r.wdir) + '"', arrow(r.wdir)]) +
-    row('スコア', r => [r.score >= 70 ? ' style="color:#F2B544;font-weight:700"' : '', r.score == null ? '--' : r.score]) + '</div>';
+    row('総合評価', r => ['', scoreBadge(r.score, 'hour')]) + '</div>';
 }
 
 // 日の出・日の入り(JSTの時刻)。NOAAの近似式
@@ -216,8 +284,8 @@ const WX = c => c == null ? '' : c === 0 ? '☀' : c <= 2 ? '🌤' : c === 3 ? '
 // Surf life のような、2時間ごとの詳細表
 function table(rows){
   const w = (m, heat) => !m || m[0] == null ? '<td>--</td>' : '<td' + (heat ? ' style="background:' + ramp(m[0]).replace('rgb','rgba').replace(')',',.35)') + '"' : '') + '>' + fmt(m[0],1) + 'm / ' + fmt(m[1],0) + 's <small>' + dir16(m[2]) + '</small></td>';
-  return '<div class="tbw"><table class="tb"><tr><th>時間</th><th>天気</th><th>気温</th><th>潮位</th><th>海水温</th><th>風</th><th>波高</th><th>風波</th><th>うねり</th><th>うねり2</th></tr>' +
-    rows.filter(r => hourOf(r.t) % 2 === 0 && r.t >= NOWT).map(r => '<tr' + (isNight(r) ? ' class="nt"' : '') + '><td>' + hourOf(r.t) + '</td><td>' + WX(r.wx) + '</td><td>' + (r.tmp == null ? '--' : Math.round(r.tmp) + '℃') + '</td><td>' + (r.tide == null ? '--' : Math.round(r.tide*100) + 'cm') + '</td><td>' + fmt(r.sst,1) + '℃</td>' +
+  return '<div class="tbw"><table class="tb"><tr><th>時間</th><th>総合評価</th><th>天気</th><th>気温</th><th>潮位</th><th>海水温</th><th>風</th><th>波高</th><th>風波</th><th>うねり</th><th>うねり2</th></tr>' +
+    rows.filter(r => hourOf(r.t) % 2 === 0 && r.t >= NOWT).map(r => '<tr' + (isNight(r) ? ' class="nt"' : '') + '><td>' + hourOf(r.t) + '</td><td>' + scoreBadge(r.score, 'table') + '</td><td>' + WX(r.wx) + '</td><td>' + (r.tmp == null ? '--' : Math.round(r.tmp) + '℃') + '</td><td>' + (r.tide == null ? '--' : Math.round(r.tide*100) + 'cm') + '</td><td>' + fmt(r.sst,1) + '℃</td>' +
       '<td style="background:' + windBg(r.kind) + '">' + fmt(r.spd,1) + 'm/s <small>' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '</small></td>' + w(r.wv, true) + w(r.ww) + w(r.sw) + w(r.sw2) + '</tr>').join('') + '</table></div>';
 }
 function spark(dt, mx, sel){
@@ -234,12 +302,12 @@ function view(p, rows){
   const tide = r.tide == null ? '--' : Math.round(r.tide*100) + 'cm ' + (r.tideNext != null && r.tideNext > r.tide ? '上げ' : '下げ');
   const wk = Math.max(0.5, ...rows.filter(x => hourOf(x.t) >= 5 && hourOf(x.t) <= 18).map(x => x.a || 0));
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestOf(dt);
-    return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + spark(dt, wk, i === di) + '<span>' + (b ? 'おすすめ ' + hourOf(b.t) + '時' : '') + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead">いまの' + p.name + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' +
+    return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + (b ? scoreBadge(b.score, 'day') : '') + spark(dt, wk, i === di) + '<span>' + (b ? 'おすすめ ' + hourOf(b.t) + '時' : '') + '</span></button>'; }).join('');
+  return '<div class="wrap"><section class="now"><div><p class="lead">いまの' + p.name + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(r.score, 'hero') +
     '<dl class="stats"><div><dt>岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>潮位</dt><dd>' + tide + '</dd></div><div><dt>水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><h2>1週間の見通し</h2><div class="week">' + week + '</div><h2>' + dayLabel(ds[di].date) + ' の波<small class="n">「面」の青い帯は、風の向きと強さの履歴から見た水面の良さ(濃いほど良い)</small></h2><div class="panel"><p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div><h2>' + dayLabel(ds[di].date) + ' の波<small class="n">「面」の青い帯は、風の向きと強さの履歴から見た水面の良さ(濃いほど良い)</small></h2><div class="panel"><p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
     '<h2>潮位</h2><div class="panel">' + tideChart(ds[di].rows, now) + '</div><h2>時間ごとの詳細(2時間ごと)</h2><div class="panel">' + table(ds[di].rows) + '</div>' +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div></div>';
 }
