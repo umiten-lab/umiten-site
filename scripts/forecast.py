@@ -1,14 +1,30 @@
 #!/usr/bin/env python3
-"""海点: 沖の波(Open-Meteoの波浪モデル)と風(気象庁モデル)から、各ポイントの岸での波のサイズを計算し、
-docs/data/forecast.json に書き出す。標準ライブラリだけで動く。"""
+"""海点 UMITEN の予報データ生成プログラム（Python標準ライブラリのみ）。
+
+処理の流れ
+----------
+1. Open-Meteo Marine から、沖の波高・周期・波向・うねり・風波などを取得。
+2. Open-Meteo Weather から、10 m 高度の風速・風向と直近24時間の予報履歴を取得。
+3. 風向と各海岸の向きを比較し、その時刻の「面が整いやすい条件」を算出。
+4. 過去の風により面が荒れていた記憶を指数緩和モデルで引き継ぎ、
+   1時間ごとに面の状態 Q（0〜1）を更新。
+5. Q を従来の板種別総合スコアに入力し、docs/data/forecast.json を出力。
+
+【重要】面モデルは物理法則そのものではなく、予報用の経験的モデルです。
+海岸近くの風・砕波や潮による地形変化を直接観測していないため、
+現地観測や波の映像と突き合わせて係数を校正する必要があります。
+"""
 import json, math, os, ssl, sys, time, datetime, pathlib, urllib.parse, urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 G = 9.81
 JST = datetime.timezone(datetime.timedelta(hours=9))
-LAG_UP = 3.0     # 面が悪→良に向かう時定数(h)。荒れた水面は、風が変わってもすぐには落ち着かない
-LAG_DOWN = 2.0   # 面が良→悪に向かう時定数(h)。ずっとオフショアなら、風が変わってもすぐには崩れない
-HOLD_BAD, HOLD_GOOD = 2, 3   # 風が悪化(改善)したと数えるまでに、その状態が続くべき時間(h)
+# 面の指数緩和時間の基準値 [hour]。後で風向・風速により可変にする。
+# Q が目標値に63.2%近づく時間が「時定数」であり、完全に整う時間ではない。
+LAG_UP = 3.0       # 面が整う（Q上昇）ときの基準時定数
+LAG_DOWN = 1.8     # 面が荒れる（Q低下）ときの基準時定数
+# 強いオンショアが続けば荒れやすく、適度なオフショアなら早く回復する。
+# 一方、急な風向変化でQを即座に目標値へ飛ばさないことが狙い。
 CTX = ssl._create_unverified_context() if os.environ.get('UMITEN_INSECURE') else None   # 証明書の検証を切る(試用のみ)
 MARINE = ("wave_height,wave_period,wave_direction,wind_wave_height,wind_wave_period,wind_wave_direction,"
           "swell_wave_height,swell_wave_period,swell_wave_direction,secondary_swell_wave_height,"
@@ -59,40 +75,175 @@ def wind_kind(frm, facing):
     d = angdiff(frm, facing)
     return "on" if d <= 30 else "sideon" if d <= 60 else "side" if d < 120 else "sideoff" if d < 150 else "off"
 
-def wind_quality(spd, frm, facing):
-    """風だけから見た面の良さ(0〜1)。オフショアで弱いほど高く、オンショアほど低い。"""
-    kind = wind_kind(frm, facing)
-    if spd is None or kind is None:
-        return None
-    t = {"off": [(6, 1.0), (8, .85), (10, .6), (13, .35)], "sideoff": [(5, .9), (7, .75), (10, .5), (13, .25)],
-         "side": [(3, .65), (5, .45), (8, .25)], "sideon": [(2, .35), (4, .18)], "on": [(1.5, .2), (3, .08)]}[kind]
-    q = next((v for lim, v in t if spd <= lim), .1 if kind in ("off", "sideoff", "side") else 0.0)
-    if spd <= 1.0:
-        return 0.85  # ほぼ無風: 風向きによる優劣をつけない
-    if spd <= 1.5:
-        return (1.5 - spd) * 2 * 0.85 + (spd - 1.0) * 2 * max(q, 0.6)
-    return q
+def clamp(value, low, high):
+    """値を指定区間に収める。特に面Qは必ず 0〜1 に抑える。"""
+    return max(low, min(high, value))
 
-def surface_quality(wqs, up=LAG_UP, down=LAG_DOWN):
-    """風の良さ(wqs: 1時間ごと)から、水面の良さを時間差つきで求める。
-    風が変わっても、悪化は HOLD_BAD 時間、改善は HOLD_GOOD 時間続いてから反映を始め、その後も指数的にゆっくり変わる。"""
-    f, last = [], None
-    for v in wqs:                                   # 欠測は直前の値で埋める
-        last = v if v is not None else last
-        f.append(last)
-    out, prev = [], None
-    for j, cur in enumerate(f):
-        if cur is None:
-            out.append(None); continue
-        prev = cur if prev is None else prev
-        bad = max(f[max(0, j - k)] for k in range(HOLD_BAD))     # 直近 HOLD_BAD 時間の最良
-        good = min(f[max(0, j - k)] for k in range(HOLD_GOOD))   # 直近 HOLD_GOOD 時間の最悪
-        if bad < prev:
-            prev += (bad - prev) * (1 - math.exp(-1 / down))
-        elif good > prev:
-            prev += (good - prev) * (1 - math.exp(-1 / up))
-        out.append(prev)
-    return out
+
+def wind_components(speed, direction_from, facing):
+    """10 m 風速を岸に直交する成分・海岸に平行な成分に分解する。
+
+    Open-Meteo の wind_direction_10m は「風が吹いてくる方角」。
+    facing は「岸から海を見たときの向き」（例: 海が東なら90度）。
+
+    d = 0度: 海から岸へのオンショア、d = 180度: 陸から海へのオフショア。
+    onshore  = max(V*cos(d), 0)
+    offshore = max(-V*cos(d), 0)
+    cross    = V*abs(sin(d))
+
+    方角を5段階に区切るのではなく、連続値を使うことで、
+    例えば風向が59度→61度と変わっても突然評価が飛ばないようにする。
+    """
+    if speed is None or facing is None:
+        return None
+    speed = max(0.0, float(speed))
+    # 0m/sでは風向は意味を持たない。APIが風向をnullで返しても、
+    # 無風として面の自然回復を計算できるようにする。
+    if direction_from is None:
+        return {"on": 0.0, "off": 0.0, "side": 0.0, "speed": speed} if speed <= 0.5 else None
+    d = math.radians(float(direction_from) - float(facing))
+    c, s = math.cos(d), math.sin(d)
+    return {"on": speed * max(c, 0.0),
+            "off": speed * max(-c, 0.0),
+            "side": speed * abs(s), "speed": speed}
+
+
+def wind_sea_fraction(marine_hour):
+    """全波に含まれる風波のエネルギー比を [0,1] で近似する。
+
+    波のエネルギーは波高の二乗に概ね比例するため、H_wind^2/H_total^2を使う。
+    海面そのものの波状の細かさを直接測った値ではなく、補助情報にすぎない。
+    モデル分解能が粗く、風波の値が不安定な場合もあるので、寄与は小さくする。
+    """
+    if not marine_hour:
+        return None
+    total, wind = marine_hour.get("wave_height"), marine_hour.get("wind_wave_height")
+    if total is None or wind is None or total <= 0.05 or wind < 0:
+        return None
+    return clamp((wind / total) ** 2, 0.0, 1.0)
+
+
+def surface_equilibrium(components, gust=None, marine_hour=None):
+    """仮に同じ風が長時間続いたときの「面の落ち着き先」Q_eqを見積もる。
+
+    Q_eqが高いほど面が整いやすい。計算は滑らかな飽和関数を使う。
+
+      Q_eq = 0.96
+             - 0.86 [1-exp(-(V_on/3.8)^1.55)]
+             - 0.50 [1-exp(-(V_side/4.5)^1.6)]
+             - 強風・ガスト・風波の小補正
+
+    風速や方向による寄与は実測に基づく確定係数ではなく、海点の暫定値。
+    特に「うねり周期が長いから面は必ず綺麗」という誤った仮定はしない。
+
+    ここで決まるのは「風が十分長く続いた先の状態」であり、
+    現時刻の面Qは別の surface_quality で履歴を考慮して求める。
+    """
+    on, side, speed = components["on"], components["side"], components["speed"]
+    on_penalty = 0.86 * (1.0 - math.exp(-((on / 3.8) ** 1.55)))
+    side_penalty = 0.50 * (1.0 - math.exp(-((side / 4.5) ** 1.6)))
+    # 8m/s以上の風は、純粋なオフショアでも飛沫や風による影響が目立つ。
+    # ただし「波が抑えられてテイクオフしにくい」のは総合評価側でも考慮する。
+    strong_penalty = 0.12 * (1.0 - math.exp(-((max(0.0, speed - 7.0) / 3.0) ** 1.5)))
+
+    # 強い瞬間風速の影響は、オン・サイド成分があるときに面へ反映。
+    # 最大0.05点(0〜1スケール)なので、ガスト予報の不確実性に過度に依存しない。
+    gust_penalty = 0.0
+    if gust is not None and gust >= speed:
+        excess = max(0.0, float(gust) - speed - 2.0)
+        gust_penalty = 0.05 * clamp(excess / 5.0, 0.0, 1.0) * clamp(on / 3.0 + side / 6.0, 0.0, 1.0)
+
+    fraction = wind_sea_fraction(marine_hour)
+    # 比率が高いときは乱れが残りやすい。ただし寄与は最大0.08に抑える。
+    sea_penalty = 0.08 * fraction if fraction is not None else 0.0
+    return clamp(0.96 - on_penalty - side_penalty - strong_penalty
+                 - gust_penalty - sea_penalty, 0.04, 0.96)
+
+
+def surface_time_constant(previous_q, target_q, components, marine_hour,
+                          up=LAG_UP, down=LAG_DOWN):
+    """現在の面Qが目標Q_eqに近づく時定数 tau[hour] を決める。
+
+    ・荒れる場合: オンショアが強いほど速く荒れる（tau小）。
+    ・整う場合: 無風でも徐々に回復。適度なオフショアなら少し速い。
+    ・長周期うねり: 回復を最大15%だけ促進する弱い補助項にする。
+    ・風波が多い: 残ったチョッピーな波を考え、回復を最大25%遅らせる。
+
+    元案の「荒れの蓄積度/(オフショア風速×周期)」は使わない。
+    ゼロ風速で発散する問題と、長周期の影響を過大評価する問題を避ける。
+    """
+    on, off, side = components["on"], components["off"], components["side"]
+    if target_q < previous_q:
+        # 風が横から当たるだけでも荒れるが、オンショアほどは速くない。
+        tau = down / (1.0 + 0.22 * on + 0.10 * side)
+        return clamp(tau, 0.60, max(0.60, float(down)))
+
+    # オフショアは最大6m/sで飽和させる（強いほど速く綺麗、とはしない）。
+    tau = up / (1.0 + 0.16 * min(6.0, off))
+    swell_period = marine_hour.get("swell_wave_period") if marine_hour else None
+    if swell_period is not None and swell_period > 0:
+        # 8秒以下なら補正なし、14秒以上でも効果は15%まで。
+        tau *= 1.0 - 0.15 * clamp((swell_period - 8.0) / 6.0, 0.0, 1.0)
+    fraction = wind_sea_fraction(marine_hour)
+    if fraction is not None:
+        tau *= 1.0 + 0.25 * fraction
+    return clamp(tau, 1.0, max(1.0, 1.5 * float(up)))
+
+
+def surface_quality(wind_times, speeds, directions, facing,
+                    gusts=None, marine_by_time=None, up=LAG_UP, down=LAG_DOWN):
+    """風の履歴から「面の整い具合 Q」を逐次計算する（0〜1）。
+
+    原理：各時刻の目標 Q_eq と、前時刻の面 Q_old を使い、
+
+      Q_new = Q_eq + (Q_old - Q_eq) * exp(-Δt/tau)
+
+    で更新する（指数緩和、一次遅れ）。
+    Δt=tau なら、目標値との差が約37%まで縮む（63%の変化）。
+    直前までオンショアで面が荒れていた場合、オフショアになっても
+    すぐQ_eqまで跳ね上がらず、数時間かけて自然に回復する。
+
+    入力には過去1日の予報アーカイブを含める。予報履歴≠現地観測であり、
+    風向が急変する沿岸では現実の状態とずれる可能性がある。
+    欠測した時刻は面Qを据え置き、無理に「完全に整った」とは判断しない。
+
+    返り値: [(Q, Q_eq, tau), ...]。Qだけが公開画面の面評価に用いられる。
+    Q_eq/tauは計算の妥当性を後から調査するためJSONにも保存する。
+    """
+    gusts = gusts if gusts is not None else [None] * len(wind_times)
+    marine_by_time = marine_by_time or {}
+    result = []
+    q_previous = None
+    previous_timestamp = None
+
+    for i, iso_time in enumerate(wind_times):
+        parts = wind_components(speeds[i], directions[i], facing)
+        stamp = datetime.datetime.fromisoformat(iso_time)
+        dt = (stamp - previous_timestamp).total_seconds() / 3600 if previous_timestamp else 1.0
+        previous_timestamp = stamp
+        marine_hour = marine_by_time.get(iso_time)
+
+        if parts is None:
+            # 未取得は「オンショア」とみなさない。前のQを保持し、診断値は欠測。
+            result.append((q_previous, None, None))
+            continue
+
+        gust = gusts[i] if i < len(gusts) else None
+        target = surface_equilibrium(parts, gust, marine_hour)
+        if q_previous is None:
+            # 計算系列の先頭。過去の風が不明なので最初は目標値を仮初期値にする。
+            # 過去24時間分を先読みしているため、今日の表示時点では初期値の影響が小さい。
+            q_previous = target
+            tau = None
+        else:
+            tau = surface_time_constant(q_previous, target, parts, marine_hour, up, down)
+            # Open-Meteo hourlyは通常1時間刻み。異常な日時や重複を防御。
+            dt = clamp(dt, 0.0, 6.0)
+            q_previous = target + (q_previous - target) * math.exp(-dt / tau)
+            q_previous = clamp(q_previous, 0.0, 1.0)
+        result.append((q_previous, target, tau))
+    return result
+
 
 def wind_score_cap(kind, spd):
     """現在の風向・風速から、その時間帯のスコア上限を設定する。
@@ -200,18 +351,49 @@ def source_grid(payload):
 
 def forecast(p):
     q = urllib.parse.urlencode({"latitude": p["lat"], "longitude": p["lon"], "timezone": "Asia/Tokyo", "forecast_days": 7})
-    marine_response = get(f"https://marine-api.open-meteo.com/v1/marine?{q}&hourly={MARINE}")
+    # 風が変わる前の海況（風波比率）も追えるよう海洋予報も過去1日を取得する。
+    # past_days は「過去のモデル予報値」であり、ブイ観測の履歴ではない。
+    marine_response = get(f"https://marine-api.open-meteo.com/v1/marine?{q}&hourly={MARINE}&past_days=1")
     m = marine_response["hourly"]
-    wq = f"https://api.open-meteo.com/v1/forecast?{q}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&past_days=1"   # 前日分は、風向きの変化の履歴(面のラグ)の計算用
-    try:
-        wind_response = get(wq + "&models=jma_seamless")
-        w = wind_response["hourly"]
-        assert any(v is not None for v in w["wind_speed_10m"])
-        wind_model = "Open-Meteo / JMA Seamless（気象庁モデル）"
-    except Exception:
-        wind_response = get(wq)
-        w = wind_response["hourly"]
-        wind_model = "Open-Meteo / 自動選択モデル（JMA優先取得失敗時）"
+    # ガスト（風の瞬間最大値）も取得できれば面に小さく反映する。
+    # JMA Seamlessの変数提供状況は時期・地域で異なり得るため段階的にフォールバック。
+    # ①JMA+ガスト → ②JMAの風のみ → ③自動選択+ガスト → ④自動選択の風のみ。
+    # ガストが無くても、面のモデル自体は計算可能にする。
+    wind_base = f"https://api.open-meteo.com/v1/forecast?{q}&wind_speed_unit=ms&past_days=1"
+    choices = [
+        ("wind_speed_10m,wind_direction_10m,wind_gusts_10m", "jma_seamless", "JMA Seamless"),
+        ("wind_speed_10m,wind_direction_10m", "jma_seamless", "JMA Seamless（ガストなし）"),
+        ("wind_speed_10m,wind_direction_10m,wind_gusts_10m", None, "自動選択モデル"),
+        ("wind_speed_10m,wind_direction_10m", None, "自動選択モデル（ガストなし）"),
+    ]
+    last_error = None
+    for variables, model_arg, model_label in choices:
+        url = f"{wind_base}&hourly={variables}"
+        if model_arg:
+            url += f"&models={model_arg}"
+        try:
+            wind_response = get(url)
+            w = wind_response["hourly"]
+            # 一部のモデルは先の時間帯で欠測することがある。
+            # 「最初の1点だけ風速があれば成功」とすると週間の総合点が欠けるため、
+            # Marine側の表示予定時刻の90%以上に風向・風速があるか確認する。
+            # カバー率が足りなければ、次の候補モデルを試す。
+            today_jst = datetime.datetime.now(JST).strftime("%Y-%m-%d")
+            future_times = {t for t in m["time"] if t[:10] >= today_jst}
+            available_times = {
+                t for t, speed, direction in zip(
+                    w["time"], w["wind_speed_10m"], w["wind_direction_10m"]
+                ) if speed is not None and (direction is not None or speed <= 0.5)
+            }
+            coverage = len(future_times & available_times) / max(1, len(future_times))
+            if coverage < 0.90:
+                raise ValueError(f"週間予報で風データが不足: カバー率{coverage:.0%}")
+            wind_model = "Open-Meteo / " + model_label
+            break
+        except Exception as exc:
+            last_error = exc
+    else:
+        raise RuntimeError(f"風の予報取得に失敗: {last_error}")
     wi = {t: i for i, t in enumerate(w["time"])}
     try:   # 天気と気温(表示用。取れなくても続行)
         weather_response = get(f"https://api.open-meteo.com/v1/forecast?{q}&hourly=temperature_2m,weather_code")
@@ -221,8 +403,19 @@ def forecast(p):
         weather_response, x, xi = None, None, {}
     facing, depth, scale = p["facing"], p.get("depth_m", 4.0), p.get("scale", 1.0)
     up, down = p.get("lag_up_h", LAG_UP), p.get("lag_down_h", LAG_DOWN)
-    wqs = [wind_quality(w["wind_speed_10m"][j], w["wind_direction_10m"][j], facing) for j in range(len(w["time"]))]
-    Q = dict(zip(w["time"], surface_quality(wqs, up, down)))   # 風の履歴から見た面の良さ
+    # MarineとWeatherでは系列の開始時刻や格子間隔が異なることがある。
+    # 配列番号で対応させず、必ず現地時刻（ISO時刻文字列）で結合する。
+    marine_by_time = {
+        t: {key: m[key][i] for key in ("wave_height", "wind_wave_height", "swell_wave_period")}
+        for i, t in enumerate(m["time"])
+    }
+    state = surface_quality(
+        w["time"], w["wind_speed_10m"], w["wind_direction_10m"], facing,
+        gusts=w.get("wind_gusts_10m"), marine_by_time=marine_by_time,
+        up=up, down=down,
+    )
+    Q = dict(zip(w["time"], state))   # 値は(Q, Q_eq, tau)のタプル
+    # 可視化で「面」を表示するときはQ[時刻][0]だけを使う。
     today = datetime.datetime.now(JST).strftime("%Y-%m-%d")
     rows = []
     for i, t in enumerate(m["time"]):
@@ -244,9 +437,16 @@ def forecast(p):
         spd = w["wind_speed_10m"][j] if j is not None else None
         wd = w["wind_direction_10m"][j] if j is not None else None
         kind = wind_kind(wd, facing)
+        # 同時刻のQ（履歴反映済み）とQ_eq（今の風が続いた場合の目標値）を分離。
+        state_value = Q.get(t, (None, None, None))
+        q_actual, q_target, q_tau = state_value
         tide, nxt = g("sea_level_height_msl"), (m["sea_level_height_msl"][i + 1] if i + 1 < len(m["time"]) else None)
         rows.append({"t": t, "h": tot, "a": round(a, 2), "per": top[1], "wdir": top[2], "sst": g("sea_surface_temperature"),
-                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd, "short", wd, facing), "score_short": score(a, top[1] or 0, Q.get(t), kind, spd, "short", wd, facing), "score_long": score(a, top[1] or 0, Q.get(t), kind, spd, "long", wd, facing), "q": round(Q[t], 2) if Q.get(t) is not None else None,
+                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, q_actual, kind, spd, "short", wd, facing), "score_short": score(a, top[1] or 0, q_actual, kind, spd, "short", wd, facing), "score_long": score(a, top[1] or 0, q_actual, kind, spd, "long", wd, facing),
+                     "q": round(q_actual, 3) if q_actual is not None else None,
+                     # 検証用: HTMLは無視してよいが、時系列でタイムラグを確認できる。
+                     "q_target": round(q_target, 3) if q_target is not None else None,
+                     "q_tau_h": round(q_tau, 2) if q_tau is not None else None,
                      "tmp": x["temperature_2m"][xi[t]] if x and t in xi else None, "wx": x["weather_code"][xi[t]] if x and t in xi else None,
                      "wv": [g("wave_height"), g("wave_period"), g("wave_direction")], "ww": [g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction")],
                      "sw": [g("swell_wave_height"), g("swell_wave_period"), g("swell_wave_direction")], "sw2": [g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")],
@@ -258,10 +458,16 @@ def forecast(p):
         "tide": {"provider": "Open-Meteo Marine / sea_level_height_msl", "grid": source_grid(marine_response),
                  "description": "平均海面基準のモデル海面高度。潮汐観測所の実測潮位ではありません"},
         "wind": {"provider": wind_model, "grid": source_grid(wind_response),
-                 "parameters": "地上10m風速・風向"},
+                 "parameters": "地上10m風速・風向・ガスト（提供される場合）／直近1日のモデル履歴を面評価へ使用"},
         "weather": {"provider": "Open-Meteo Forecast / 自動選択モデル" if weather_response else "取得なし",
                     "grid": source_grid(weather_response) if weather_response else None,
                     "parameters": "地上2m気温・天気コード"},
+    }
+    sources["surface_model"] = {
+        "name": "面の一次遅れモデル v2（経験則、未検証）",
+        "description": "風向・風速・ガスト・風波比率から目標面Qを算出。風の履歴と指数緩和時間を使い、面の荒れ・回復の時間差を表現する。",
+        "parameters": {"baseline_recovery_h": up, "baseline_roughening_h": down},
+        "notice": "風・波のモデル格子値に基づく推定であり、現地の面状態の実測ではない"
     }
     return rows, sources
 
