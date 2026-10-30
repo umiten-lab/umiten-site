@@ -372,13 +372,35 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .wave-axis-label{font-size:10px;}
 }
 
-/* 海点：コンパクトな方位図と一列に揃う6つの指標 */
-.now{grid-template-columns:minmax(0,1fr) 222px;gap:10px 18px;align-items:start;padding-bottom:28px}
+/* 現在予報の独立した見出し：一週間の見通しとの情報区切りを明確化。 */
+.current-conditions-heading{
+  display:flex;align-items:center;flex-wrap:wrap;gap:7px 10px;
+  margin:20px 0 10px;font-size:18px;font-weight:750;line-height:1.45;
+  color:var(--text);letter-spacing:.01em;
+}
+.current-conditions-heading .current-conditions-dot{
+  width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:var(--sun);
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--sun) 20%,transparent);
+}
+.current-conditions-heading small{
+  font-size:11px;font-weight:500;color:var(--sub);line-height:1.4;
+}
+@media(max-width:760px){
+  .current-conditions-heading{margin:16px 0 8px;font-size:17px;gap:6px 9px}
+  .current-conditions-heading small{flex-basis:100%;padding-left:18px;font-size:10px}
+}
+/* 海点：方位図は読みやすさ優先。PCは右、スマホは要約カードの下に並べる */
+.now{grid-template-columns:minmax(0,1fr) 236px;gap:12px 18px;align-items:start;padding-bottom:28px}
 .now > div:first-child{min-width:0}
-.now .compass{width:222px;max-width:100%;justify-self:end;padding:10px;border-radius:15px}
-.now .compass svg{width:166px;height:166px;max-width:100%;margin:0 auto}
-.now .compass .legend{gap:5px 8px;font-size:10px;justify-content:center;margin:5px 0 0}
-.now .compass .note{font-size:10px;line-height:1.4;margin:5px 0 0}
+.now .compass{
+  width:236px;max-width:100%;justify-self:end;padding:12px;border-radius:16px;
+  background:rgba(8,16,28,.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 26px rgba(0,0,0,.22);
+}
+.now .compass svg{display:block;width:170px;height:170px;max-width:100%;margin:0 auto}
+.now .compass .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;line-height:1.45;justify-content:center;margin:8px 0 0;color:var(--text)}
+.now .compass .legend span{display:flex;align-items:center;gap:5px}
+.now .compass .note{font-size:11px;line-height:1.5;margin:8px 0 0;color:var(--sub)}
 .now .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));max-width:none;width:100%;gap:9px;padding:12px 0 0;margin:0;border-top:1px solid var(--line)}
 .now .stats > div{min-width:0}
 .now .stats dt{font-size:11px;gap:5px}
@@ -400,11 +422,14 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 /* 時系列の対象日と軸の見出しはスクロール中も固定する */
 .panel>.series-date,.panel>.series-key,.panel>.face-color-key{position:sticky;left:0}
 @media(max-width:760px){
-  .now{grid-template-columns:1fr 164px;gap:10px}
-  .now .compass{width:164px;padding:7px;border-radius:12px;align-self:start}
-  .now .compass svg{width:125px;height:125px}
-  .now .compass .legend{font-size:9px;line-height:1.4}
-  .now .compass .note{font-size:9px}
+  .now{grid-template-columns:1fr;gap:10px}
+  .now .compass{
+    width:100%;justify-self:stretch;display:grid;grid-template-columns:134px minmax(0,1fr);
+    grid-template-areas:'svg legend' 'svg note';gap:8px 12px;padding:10px 12px;border-radius:14px;
+  }
+  .now .compass svg{grid-area:svg;width:132px;height:132px;margin:0}
+  .now .compass .legend{grid-area:legend;justify-content:flex-start;align-self:end;margin:0;font-size:10px}
+  .now .compass .note{grid-area:note;margin:0;font-size:10px}
   .now .stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 7px;padding-top:10px}
   .now .stats dd{font-size:14px}
   .top-insights{gap:8px;margin-top:10px}
@@ -423,20 +448,18 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .top-insights .wetsuit-small{font-size:10px}
 }
 @media(max-width:430px){
-  .now{grid-template-columns:minmax(0,1fr) 142px}
-  .now .compass{width:142px}
-  .now .compass svg{width:112px;height:112px}
-  .now .compass .legend{font-size:8px}
-  .now .compass .note{font-size:8px}
+  .now .compass{grid-template-columns:122px minmax(0,1fr);gap:8px 10px;padding:9px 10px}
+  .now .compass svg{width:120px;height:120px}
+  .now .compass .legend{font-size:9px;line-height:1.45}
+  .now .compass .note{font-size:9px;line-height:1.45}
   .now .stats dt{font-size:10px;gap:4px;white-space:nowrap}
   .now .stats dd{font-size:13px}
   .now .stats .stat-icon,.now .stats .stat-icon svg{width:15px;height:15px;flex-basis:15px}
   .now .stats .kind{display:block;width:max-content;margin:3px 0 0}
 }
 @media(max-width:350px){
-  .now{grid-template-columns:minmax(0,1fr) 125px}
-  .now .compass{width:125px}
-  .now .compass svg{width:102px;height:102px}
+  .now .compass{grid-template-columns:112px minmax(0,1fr)}
+  .now .compass svg{width:110px;height:110px}
   .top-insights{gap:5px}
 }
 
@@ -658,6 +681,39 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .tide-lunar .lunar-icon{font-size:20px}
   .tide-lunar .lunar-name{font-size:14px}
   .tide-lunar .lunar-note{flex-basis:100%;margin-left:30px}
+}
+
+/* ------------------------------------------------------------
+ * 海点：波の写真はブランドヘッダーだけに使用する。
+ *
+ * 以前は背景写真が .hero 全体（現在の波予報・採点・方位図）まで
+ * 続いており、とくにナイトで文字と写真の波模様が重なっていた。
+ * 写真の表示領域をロゴ近辺に限定し、下端を透過で自然にぼかす。
+ * これにより、予報値は各テーマの落ち着いた背景色の上で読む。
+ * HTML / Python / 採点・言語切替などの挙動は変更しない。
+ * ------------------------------------------------------------ */
+.hero > img {
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 195px; /* PC の大きなロゴまで見せる */
+  max-height: none;
+  object-fit: cover;
+  object-position: center 40%;
+  opacity: var(--hero-opacity, .24);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 32%, rgba(0,0,0,.55) 64%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 32%, rgba(0,0,0,.55) 64%, transparent 100%);
+  -webkit-mask-composite: initial;
+  mask-composite: add;
+  pointer-events: none;
+}
+@media (max-width: 760px) {
+  .hero > img {
+    height: 122px; /* スマホはロゴの行を中心にして予報本文にかけない */
+    object-position: center 45%;
+    opacity: var(--hero-opacity, .24);
+  }
 }
 </style>
 </head>
@@ -1192,7 +1248,7 @@ function view(p, rows){
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestRecommendation(d.rows, now), ref = dailyRatingRow(d.rows), rated = b || ref;
     const status = b ? 'おすすめ ' + hourOf(b.t) + '時・' + boardScore(b) + '点' : 'おすすめ枠なし' + (ref ? '／' + (isSafeDaylightHour(ref) ? '日中最高' : '参考') + ' ' + boardScore(ref) + '点' : '／予報データなし');
     return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + scoreBadge(boardScore(rated), 'day') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + status + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead"><span class="forecast-lead-title">' + p.name + ' の予報</span><span class="forecast-lead-detail">' + forecastTime(r.t) + (p.map_url ? ' <a class="spot-map" href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">地図を見る ↗</a>' : '') + '</span></p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
+  return '<div class="wrap"><h2 class="current-conditions-heading"><span class="current-conditions-dot" aria-hidden="true"></span><span>現在のコンディション</span><small>現在時刻付近の予報値</small></h2><section class="now"><div><p class="lead"><span class="forecast-lead-title">' + p.name + ' の予報</span><span class="forecast-lead-detail">' + forecastTime(r.t) + (p.map_url ? ' <a class="spot-map" href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">地図を見る ↗</a>' : '') + '</span></p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
     '<dl class="stats"><div><dt>' + statIcon('shore') + '岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>' + statIcon('offshore') + '沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>' + statIcon('period') + '周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
@@ -1236,6 +1292,7 @@ const LANG_TEXT_EN = {
  // 固有名称・タイトル・操作
  '波・風の時系列':'Wave & wind timeline','潮位の時系列':'Tide timeline',
  '時間別の詳細（2時間ごと）':'Hourly details (every 2 hours)',
+ '現在のコンディション':'Current conditions','現在時刻付近の予報値':'Forecast near the current time',
  '1週間の見通し':'7-day outlook','対象日':'Forecast date','日本時間（JST）':'Japan time (JST)',
  'ポイント':'Surf spots','表示中のポイント':'CURRENT SPOT','サーフポイント一覧':'Surf spots',
  '現在表示中のサーフポイント':'Current surf spot','前のサーフポイント':'Previous surf spot',
