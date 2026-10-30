@@ -289,6 +289,13 @@ let SUN = [5, 18], NOWT = '';
 function isNight(r){ const h = hourOf(r.t) + .5; return h < SUN[0] || h > SUN[1]; }
 function days(rows){ const m = {}; rows.forEach(r => (m[r.t.slice(0,10)] = m[r.t.slice(0,10)] || []).push(r)); return Object.keys(m).sort().map(d => ({date:d, rows:m[d]})); }
 function daytime(rows){ return rows.filter(r => hourOf(r.t) >= 5 && hourOf(r.t) <= 18); }
+// 公開おすすめ枠は、日没後・日の出前を除く。開始・終了とも明るい1時間を対象。
+function isSafeDaylightHour(r, p=POINTS[state.pi]){
+  if(!p || !Number.isFinite(Number(p.lat)) || !Number.isFinite(Number(p.lon))) return false;
+  const [rise, set] = sun(r.t.slice(0,10), Number(p.lat), Number(p.lon));
+  const start = hourOf(r.t);
+  return Number.isFinite(rise) && Number.isFinite(set) && start >= Math.max(5, rise) && start + 1 <= Math.min(20, set - 0.15);
+}
 function boardScore(r){
   if(!r) return null;
   // 古いforecast.jsonを誤ってロング用に利用しない。
@@ -299,32 +306,39 @@ function expertFlag(a, variant=''){
   return a != null && a >= 1.9 ? '<span class="advanced-flag ' + (variant ? 'advanced-flag--' + variant : '') + '">⚠ 頭オーバー・上級者向け</span>' : '';
 }
 function bestRecommendation(rows, now){
-  const candidates = daytime(rows).filter(r => r.t >= now && boardScore(r) != null && boardScore(r) >= 55);
+  const candidates = daytime(rows).filter(r => r.t >= now && isSafeDaylightHour(r) && boardScore(r) != null && boardScore(r) >= 55);
   return candidates.length ? candidates.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
 }
 // 茨城弁は短い決め台詞だけに使う。会話のニュアンスと予報の変化を優先し、
 // 機械的にすべての文末へ「だっぺ」を付けない。
+// 使える時間が残っていれば通常の予報コメント。夜の高得点には自分でツッコむ。
 function adviceFor(current, rows, now){
   const s = boardScore(current);
   if(s == null) return '予報データを確認できません。';
   const today = current.t.slice(0,10);
-  const upcoming = daytime(rows).filter(r => r.t.slice(0,10) === today && r.t > current.t && r.t >= now && boardScore(r) != null);
-  const b = upcoming.length ? upcoming.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
+  const future = rows.filter(r => r.t.slice(0,10) === today && r.t > current.t && r.t >= now && hourOf(r.t) >= 5 && hourOf(r.t) <= 19 && boardScore(r) != null);
+  const eligible = future.filter(r => isSafeDaylightHour(r));
+  const b = eligible.length ? eligible.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
   const nextScore = b ? boardScore(b) : null;
   const isRising = nextScore != null && nextScore >= Math.max(55, s + 12);
   const timeText = b ? hourOf(b.t) + '時ごろ' : '';
-  // 1. 明らかな回復の見込みがあるなら、今より良い時間帯を案内する。
+  const sunsetToday = sun(today, POINTS[state.pi].lat, POINTS[state.pi].lon)[1];
+  const afterSunset = future.filter(r => hourOf(r.t) >= sunsetToday);
+  const lateBest = afterSunset.length ? afterSunset.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
+  // 暗くなる時間だけ高得点なら、予報値と入水の可否を分けてユーモラスに伝える。
+  if(lateBest && boardScore(lateBest) >= Math.max(70, s+12) &&
+     (b == null || boardScore(lateBest) >= boardScore(b) + 8)) {
+    return hourOf(lateBest.t) + '時ごろが狙い目。もうちっと待ってみっぺ。って、日が暮れてんな！今日は無理すんのやめとくべ。';
+  }
   if(isRising && nextScore >= 70 && s < 85)
     return timeText + 'が狙い目。もうちっと待ってみっぺ。';
-  // 2. 十分な波質とサイズがそろったときだけ、前向きな一言。
   if(s >= 90) return 'いやどうも、いい予報だな！';
   if(s >= 85) return 'こりゃ、いがっぺ！';
   if(s >= 70 && (!b || s >= nextScore + 10)) return '今のうちがよさそうだな。海さ行ぐべ！';
   if(s >= 70) return '今んとこ、いがっぺ！';
-  // 3. 回復途中のときは「待つ」判断を優先。
   if(isRising) return timeText + 'には上向くかも。ちっと様子見っぺ。';
   if(s >= 55) return 'まあまあだな。風を見ながら決めっぺ。';
-  if(!upcoming.length) return '今日は無理しねえで、また次だな。';
+  if(!eligible.length) return '今日は無理しねえで、また次だな。';
   if(s >= 40) return '今はちっと厳しいな。もう少し様子見だな。';
   return '今日は無理しねえ方がよさそうだな。';
 }
