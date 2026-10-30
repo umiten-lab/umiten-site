@@ -67,7 +67,11 @@ def wind_quality(spd, frm, facing):
     t = {"off": [(6, 1.0), (8, .85), (10, .6), (13, .35)], "sideoff": [(5, .9), (7, .75), (10, .5), (13, .25)],
          "side": [(3, .65), (5, .45), (8, .25)], "sideon": [(2, .35), (4, .18)], "on": [(1.5, .2), (3, .08)]}[kind]
     q = next((v for lim, v in t if spd <= lim), .1 if kind in ("off", "sideoff", "side") else 0.0)
-    return max(q, .6) if spd <= 1.5 else q            # ほぼ無風ならベタ凪に近い
+    if spd <= 1.0:
+        return 0.85  # ほぼ無風: 風向きによる優劣をつけない
+    if spd <= 1.5:
+        return (1.5 - spd) * 2 * 0.85 + (spd - 1.0) * 2 * max(q, 0.6)
+    return q
 
 def surface_quality(wqs, up=LAG_UP, down=LAG_DOWN):
     """風の良さ(wqs: 1時間ごと)から、水面の良さを時間差つきで求める。
@@ -122,6 +126,31 @@ BOARD_PROFILES = {
 }
 
 
+# 風向の正規分布型評価（角度はオフショア中心からのずれ）。
+# ロングは鋭いピーク、ショートは広めのピークを与える。
+# 数値は海点の暫定的なサーフ適性パラメータで、観測で校正したものではない。
+WIND_DIRECTION_SIGMA = {"short": 65.0, "long": 45.0}  # degree; ロングはほどよく鋭く
+
+
+def offshore_suitability(frm, facing, spd, board="short"):
+    """オフショア風向を中心としたガウス型の風向適性 (0–1)。
+
+    方位は風の「吹いてくる向き」。岸が海に向いている facing に対し、
+    最良のオフショアは facing+180 度。弱風（≦1m/s）では
+    風向の不確実性/実際の海面影響が大きいので角度減点しない。
+    3m/s 以上では板種別のガウス型ペナルティを十分に効かせる。
+    """
+    if frm is None or facing is None or spd is None:
+        return None
+    theta = angdiff(frm, (facing + 180) % 360)
+    sigma = WIND_DIRECTION_SIGMA[board]
+    gaussian = math.exp(-0.5 * (theta / sigma) ** 2)
+    # 完全なゼロにせず、微弱/瞬間的な方位変化で評価が壊れないようにする。
+    floor = 0.18 if board == "long" else 0.20
+    strength = max(0.0, min(1.0, (spd - 1.0) / 2.0))
+    return 1.0 - strength * (1.0 - (floor + (1.0 - floor) * gaussian))
+
+
 def size_suitability(a, board="short"):
     """正規分布の指数部を利用したサイズ適合度 (0–1)。統計的な確率ではない。"""
     if a is None:
@@ -130,12 +159,12 @@ def size_suitability(a, board="short"):
     return math.exp(-0.5 * ((max(0.0, a) - profile["mu"]) / profile["sigma"]) ** 2)
 
 
-def score(a, per, q, kind=None, spd=None, board="short"):
-    """板種別の波予報スコア。面70点・サイズ20点・周期10点にサイズ適合度を適用。
+def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=None):
+    """板種別の波予報スコア（暫定）：面/風70・サイズ20・周期10。
 
-    加算だけではモモやコシの小波に高得点がつくため、
-    波サイズの正規分布型の適合度で総合点も抑制する。
-    風向・風速の上限は引き続き適用。すべて試験的な経験則。
+    サイズ適合度（m）とオフショア中心の風向適合度（度）に
+    別々のガウス関数を用いる。ロングは風向分布を鋭く、
+    ショートはやや広くし、ロングの横風評価を過度に厳しくしない。
     """
     if a is None or q is None or kind is None or spd is None:
         return None
@@ -143,17 +172,20 @@ def score(a, per, q, kind=None, spd=None, board="short"):
     q = max(0.0, min(1.0, q))
     fit = size_suitability(a, board)
     period_points = 10 if per >= 10 else 7 if per >= 8 else 3 if per >= 6 else 0
-    # 基礎点は風・面を最重視。そのうえでサイズ適合度を二重に反映。
     base = 70 * q + 20 * fit + period_points
     raw = base * (0.35 + 0.65 * fit)
 
-    # モモやコシでは良い風でも◎を出さない。サイズ境界は暫定値。
+    # 加算式での過大評価を避け、風向の「角度」も連続的に評価する。
+    # ほぼ無風では方位を優劣の根拠にしない。
+    alignment = offshore_suitability(wind_dir, facing, spd, board)
+    if alignment is not None:
+        raw *= alignment
+
     size_cap = (25 if a < 0.35 else
                 35 if a < 0.50 else
                 39 if a < 0.70 else
                 69 if a < 0.90 else
                 83 if a < 1.00 else 100)
-    # 短い周期で高得点にならないようにする。
     period_cap = 59 if per < 6 else 79 if per < 8 else 100
     wind_cap = wind_score_cap(kind, spd)
     return max(0, min(100, round(min(raw, size_cap, period_cap, wind_cap))))
@@ -201,7 +233,7 @@ def forecast(p):
         kind = wind_kind(wd, facing)
         tide, nxt = g("sea_level_height_msl"), (m["sea_level_height_msl"][i + 1] if i + 1 < len(m["time"]) else None)
         rows.append({"t": t, "h": tot, "a": round(a, 2), "per": top[1], "wdir": top[2], "sst": g("sea_surface_temperature"),
-                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd, "short"), "score_short": score(a, top[1] or 0, Q.get(t), kind, spd, "short"), "score_long": score(a, top[1] or 0, Q.get(t), kind, spd, "long"), "q": round(Q[t], 2) if Q.get(t) is not None else None,
+                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd, "short", wd, facing), "score_short": score(a, top[1] or 0, Q.get(t), kind, spd, "short", wd, facing), "score_long": score(a, top[1] or 0, Q.get(t), kind, spd, "long", wd, facing), "q": round(Q[t], 2) if Q.get(t) is not None else None,
                      "tmp": x["temperature_2m"][xi[t]] if x and t in xi else None, "wx": x["weather_code"][xi[t]] if x and t in xi else None,
                      "wv": [g("wave_height"), g("wave_period"), g("wave_direction")], "ww": [g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction")],
                      "sw": [g("swell_wave_height"), g("swell_wave_period"), g("swell_wave_direction")], "sw2": [g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")],
