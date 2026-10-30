@@ -174,6 +174,54 @@ img{max-width:100%}
 .series-date b{color:var(--sun);font-weight:700}
 .series-date .zone{font-size:11px;color:var(--sub);font-weight:400}
 @media(max-width:760px){.series-heading .date-label{font-size:13px}.series-date{font-size:12px;flex-wrap:wrap;gap:4px 7px}}
+
+/* User-selectable color themes; dark is the original brand palette. */
+:root,[data-theme="dark"]{color-scheme:dark;--control-bg:rgba(6,18,42,.68);--compass-bg:rgba(6,18,42,.72);--hero-opacity:.24;--selected-text:#06122A}
+[data-theme="light"]{color-scheme:light;--bg:#F2F7FA;--panel:#FFFFFF;--line:rgba(32,66,92,.19);--text:#143047;--sub:#496579;--sun:#AB6B12;--sea:#1475B0;--control-bg:rgba(255,255,255,.9);--compass-bg:#FFFFFF;--hero-opacity:.10;--selected-text:#FFFFFF}
+[data-theme="ocean"]{color-scheme:dark;--bg:#041D2A;--panel:#0B3341;--line:rgba(170,234,228,.23);--text:#E6FFFF;--sub:#ADD0D5;--sun:#7BE6C8;--sea:#48B9D5;--control-bg:rgba(4,29,42,.76);--compass-bg:rgba(6,38,52,.88);--hero-opacity:.22;--selected-text:#042D3B}
+[data-theme="sunset"]{color-scheme:dark;--bg:#211B35;--panel:#352943;--line:rgba(255,215,216,.2);--text:#FFF0EA;--sub:#DCC1CE;--sun:#FDB57A;--sea:#AD8ADC;--control-bg:rgba(34,25,52,.8);--compass-bg:rgba(36,23,51,.84);--hero-opacity:.20;--selected-text:#241D37}
+button{background:var(--control-bg)}
+button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="true"]{color:var(--selected-text)}
+.board-switch .board-buttons{background:var(--control-bg)}
+.compass{background:var(--compass-bg)}
+.lead{color:var(--text)}
+[data-theme="light"] .hero .logo{background:#06122A;border-radius:12px;padding:5px 10px;box-sizing:content-box}
+[data-theme="light"] .hero>img{opacity:.08}
+[data-theme="light"] .size{ text-shadow:none }
+[data-theme="light"] .day[aria-pressed="true"], [data-theme="light"] .tabs button[aria-pressed="true"]{color:#fff;background:#176D96;border-color:#176D96}
+[data-theme="light"] .day[aria-pressed="true"] .score-mini{color:#143047;background:rgba(255,255,255,.85)}
+[data-theme="light"] svg text[fill="#A9BBD1"]{fill:#456073!important}
+[data-theme="light"] svg text[fill="#E9F1FA"]{fill:#17354A!important}
+[data-theme="light"] .score-level--excellent{--rating:#13795C;--rating-bg:rgba(26,145,105,.11)}
+[data-theme="light"] .score-level--good{--rating:#176EAB;--rating-bg:rgba(30,124,190,.1)}
+[data-theme="light"] .score-level--fair{--rating:#96600E;--rating-bg:rgba(180,111,19,.12)}
+[data-theme="light"] .score-level--weak{--rating:#A44B13;--rating-bg:rgba(203,100,37,.1)}
+[data-theme="light"] .score-level--poor{--rating:#A52848;--rating-bg:rgba(205,49,83,.09)}
+.theme-picker{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}
+.theme-picker label{font-size:12px;color:var(--sub);font-weight:700}
+.theme-picker select{appearance:auto;background:var(--panel);color:var(--text);font:inherit;font-size:13px;padding:7px 28px 7px 12px;border:1px solid var(--line);border-radius:999px;min-height:38px;max-width:100%}
+.theme-picker select:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+.recommendation{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px 14px;margin:10px 0 14px;background:var(--panel);border-radius:12px;border:1px solid var(--line);font-size:13px}
+.recommendation b{color:var(--sun);font-size:15px}
+.recommendation .tag{font-size:11px;color:var(--sub)}
+.recommendation .score-mini{margin-top:0}
+.forecast-advice{font-size:13px;line-height:1.6;color:var(--text);margin:7px 0 0;max-width:560px}
+.source-panel{margin-top:26px;border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:14px 16px}
+.source-panel summary{cursor:pointer;font-size:14px;font-weight:700;color:var(--text)}
+.source-panel table{width:100%;border-collapse:collapse;margin-top:9px;font-size:12px}
+.source-panel th,.source-panel td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.source-panel th{color:var(--sub);font-weight:600;width:26%}
+.source-panel p{font-size:12px;color:var(--sub);line-height:1.7}
+.source-panel a{color:var(--sea)}
+@media(max-width:760px){
+ .theme-picker{width:100%;justify-content:flex-start;margin:4px 0 0}
+ .theme-picker select{max-width:260px}
+ .source-panel{padding:12px 10px;overflow-wrap:anywhere}
+ .source-panel table{display:block;overflow-x:auto}
+ .source-panel th,.source-panel td{min-width:125px}
+ .recommendation{gap:6px}
+}
+
 </style>
 </head>
 <body>
@@ -197,21 +245,21 @@ function sz(a){
 
 // 総合評価: 予測スコア (0–100) から5段階へ。境界値は暫定値。
 const RATING_LEVELS = [
-  {min:85, mark:'◎', label:'いやどうも、最高だっぺ！', key:'excellent', range:'85〜100点'},
-  {min:70, mark:'○', label:'いがっぺ！', key:'good', range:'70〜84点'},
-  {min:55, mark:'△', label:'まあまあだっぺ', key:'fair', range:'55〜69点'},
-  {min:40, mark:'▼', label:'ちっと厳しいな', key:'weak', range:'40〜54点'},
-  {min:0, mark:'×', label:'今日はやめっぺ', key:'poor', range:'0〜39点'}
+  {min:85, mark:'◎', label:'最高', key:'excellent', range:'85〜100点'},
+  {min:70, mark:'○', label:'良好', key:'good', range:'70〜84点'},
+  {min:55, mark:'△', label:'まずまず', key:'fair', range:'55〜69点'},
+  {min:40, mark:'▼', label:'今ひとつ', key:'weak', range:'40〜54点'},
+  {min:0, mark:'×', label:'厳しい', key:'poor', range:'0〜39点'}
 ];
 function rating(score){
   if(score == null || !Number.isFinite(Number(score))) return {mark:'—',label:'データなし',key:'unknown',range:''};
   const v = Math.min(100, Math.max(0, Number(score)));
   return RATING_LEVELS.find(x => v >= x.min);
 }
-function scoreBadge(score, display){
+function scoreBadge(score, display, advice){
   const r = rating(score), n = score == null || !Number.isFinite(Number(score)) ? '--' : Math.round(Number(score));
   const tip = '総合予報スコア ' + n + '点：' + r.label;
-  if(display === 'hero') return '<div class="score-summary score-level--' + r.key + '" aria-label="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span><div class="score-copy"><span class="score-kicker">総合予報スコア</span><strong>' + r.label + '</strong><span class="score-num">' + n + ' / 100点</span></div></div>';
+  if(display === 'hero') return '<div class="score-summary score-level--' + r.key + '" aria-label="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span><div class="score-copy"><span class="score-kicker">現在の総合予報スコア</span><strong>' + (advice || r.label) + '</strong><span class="score-num">' + n + ' / 100点</span></div></div>';
   if(display === 'day') return '<span class="score-mini score-level--' + r.key + '" title="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span>' + n + '点</span>';
   const cls = display === 'table' ? 'score-table' : 'score-hour';
   return '<span class="' + cls + ' score-level--' + r.key + '" title="' + tip + '" aria-label="' + tip + '"><span class="score-symbol" aria-hidden="true">' + r.mark + '</span><span class="score-num">' + n + '</span></span>';
@@ -250,24 +298,71 @@ function boardScore(r){
 function expertFlag(a, variant=''){
   return a != null && a >= 1.9 ? '<span class="advanced-flag ' + (variant ? 'advanced-flag--' + variant : '') + '">⚠ 頭オーバー・上級者向け</span>' : '';
 }
+function bestRecommendation(rows, now){
+  const candidates = daytime(rows).filter(r => r.t >= now && boardScore(r) != null && boardScore(r) >= 55);
+  return candidates.length ? candidates.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
+}
+// 茨城弁は短い決め台詞だけに使う。会話のニュアンスと予報の変化を優先し、
+// 機械的にすべての文末へ「だっぺ」を付けない。
+function adviceFor(current, rows, now){
+  const s = boardScore(current);
+  if(s == null) return '予報データを確認できません。';
+  const today = current.t.slice(0,10);
+  const upcoming = daytime(rows).filter(r => r.t.slice(0,10) === today && r.t > current.t && r.t >= now && boardScore(r) != null);
+  const b = upcoming.length ? upcoming.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
+  const nextScore = b ? boardScore(b) : null;
+  const isRising = nextScore != null && nextScore >= Math.max(55, s + 12);
+  const timeText = b ? hourOf(b.t) + '時ごろ' : '';
+  // 1. 明らかな回復の見込みがあるなら、今より良い時間帯を案内する。
+  if(isRising && nextScore >= 70 && s < 85)
+    return timeText + 'が狙い目。もうちっと待ってみっぺ。';
+  // 2. 十分な波質とサイズがそろったときだけ、前向きな一言。
+  if(s >= 90) return 'いやどうも、いい予報だな！';
+  if(s >= 85) return 'こりゃ、いがっぺ！';
+  if(s >= 70 && (!b || s >= nextScore + 10)) return '今のうちがよさそうだな。海さ行ぐべ！';
+  if(s >= 70) return '今んとこ、いがっぺ！';
+  // 3. 回復途中のときは「待つ」判断を優先。
+  if(isRising) return timeText + 'には上向くかも。ちっと様子見っぺ。';
+  if(s >= 55) return 'まあまあだな。風を見ながら決めっぺ。';
+  if(!upcoming.length) return '今日は無理しねえで、また次だな。';
+  if(s >= 40) return '今はちっと厳しいな。もう少し様子見だな。';
+  return '今日は無理しねえ方がよさそうだな。';
+}
+function recommendView(rows, now){
+  const best = bestRecommendation(rows, now);
+  if(!best) return '<div class="recommendation"><span class="tag">おすすめの時間帯</span><b>該当なし</b><span>55点以上の時間帯はありません</span></div>';
+  const s = boardScore(best), date = dayLabel(best.t.slice(0,10));
+  return '<div class="recommendation"><span class="tag">おすすめの時間帯（総合点と連動）</span><b>' + date + ' ' + hourOf(best.t) + ':00〜' + (hourOf(best.t)+1) + ':00</b>' + scoreBadge(s,'day') + '</div>';
+}
 function bestOf(rows){ return rows.reduce((b,r) => (boardScore(r) != null && (b == null || boardScore(r) > boardScore(b))) ? r : b, null); }
 
 // うねりと風の向きのコンパス。陸側を灰色、うねりは岸に届きやすいほど金色
 function compass(r, p){
   const c = 120, R = 84, pt = (d,rad) => [c + rad*Math.sin(d*Math.PI/180), c - rad*Math.cos(d*Math.PI/180)];
-  const [x1,y1] = pt(p.facing+90, R), [x2,y2] = pt(p.facing+270, R), [lx,ly] = pt(p.facing+180, 44);
-  const arr = (d,w,col,len) => {
-    const tip = R - len, base = tip + w*2.4, [ax,ay] = pt(d,R), [bx,by] = pt(d,base), [tx,ty] = pt(d,tip), ux = Math.cos(d*Math.PI/180), uy = Math.sin(d*Math.PI/180), k = w*1.4;
-    return '<line x1="' + ax + '" y1="' + ay + '" x2="' + bx + '" y2="' + by + '" stroke="' + col + '" stroke-width="' + w + '" stroke-linecap="round"/><polygon points="' + tx + ',' + ty + ' ' + (bx+ux*k) + ',' + (by+uy*k) + ' ' + (bx-ux*k) + ',' + (by-uy*k) + '" fill="' + col + '"/>';
+  const [x1,y1] = pt(p.facing+90,R), [x2,y2] = pt(p.facing+270,R), [lx,ly] = pt(p.facing+180,44);
+  const arr = (d,col) => {
+    const [sx,sy] = pt(d,82), [ex,ey] = pt(d,41), a = d*Math.PI/180;
+    const ux=Math.sin(a), uy=-Math.cos(a), nx=Math.cos(a), ny=Math.sin(a);
+    const tx=ex, ty=ey, bx=ex+ux*10, by=ey+uy*10;
+    return '<line x1="'+sx+'" y1="'+sy+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>'+
+      '<polygon points="'+tx+','+ty+' '+(bx+nx*5)+','+(by+ny*5)+' '+(bx-nx*5)+','+(by-ny*5)+'" fill="'+col+'"/>';
   };
-  let s = '<svg viewBox="0 0 240 240" role="img" aria-label="うねりと風の向き"><circle cx="120" cy="120" r="84" fill="rgba(59,143,224,.16)" stroke="rgba(233,241,250,.3)"/><path d="M' + x1 + ' ' + y1 + 'A84 84 0 0 1 ' + x2 + ' ' + y2 + 'Z" fill="rgba(169,187,209,.3)"/>' +
-    '<text x="120" y="14" text-anchor="middle" font-size="12" fill="#A9BBD1">北</text><text x="' + lx + '" y="' + (ly+4) + '" text-anchor="middle" font-size="12" fill="#E9F1FA">陸</text>';
-  (r.comps || []).filter(m => m[0] >= 0.05 && m[2] != null).forEach(m => {
-    const col = m[3]/m[0] >= 0.6 ? '#F2B544' : '#7F93AD', [tx,ty] = pt(m[2], R+17);
-    s += arr(m[2], 2 + m[0]*7, col, 26 + Math.min(m[0],1.5)*34) + '<text x="' + tx + '" y="' + (ty+4) + '" text-anchor="middle" font-size="11" fill="' + col + '">' + fmt(m[0],1) + 'm</text>';
-  });
-  if(r.dir != null) s += arr(r.dir, 2, '#E9F1FA', 24);
-  return s + '</svg><div class="legend"><span><i style="background:#F2B544"></i>岸に届くうねり</span><span><i style="background:#7F93AD"></i>届きにくいうねり</span><span><i style="background:#E9F1FA"></i>風</span></div>';
+  let s = '<svg viewBox="0 0 240 240" role="img" aria-label="波と風の向き。矢印の長さはすべて同じ"><circle cx="120" cy="120" r="84" fill="rgba(59,143,224,.16)" stroke="var(--line)"/>' +
+    '<path d="M'+x1+' '+y1+'A84 84 0 0 1 '+x2+' '+y2+'Z" fill="rgba(169,187,209,.24)"/>' +
+    '<text x="120" y="14" text-anchor="middle" font-size="12" fill="var(--sub)">北</text>'+
+    '<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="12" fill="var(--text)">陸</text>';
+  // 波向は主要なうねりを代表表示。複数成分の太さ・長さに差を付けない。
+  const wave = (r.comps||[]).filter(x => x[0]!=null && x[0]>=0.05 && x[2]!=null)
+    .sort((a,b)=>(b[3]||0)-(a[3]||0))[0];
+  if(wave){
+    const col=wave[3]/wave[0]>=0.6 ? '#F2B544' : '#7F93AD';
+    s+=arr(wave[2],col);
+    const [tx,ty]=pt(wave[2],103);
+    s+='<text x="'+tx+'" y="'+(ty+4)+'" text-anchor="middle" font-size="11" fill="'+col+'">波 '+fmt(wave[0],1)+'m</text>';
+  }
+  if(r.dir!=null) s+=arr(r.dir,'var(--text)');
+  return s+'</svg><div class="legend"><span><i style="background:#F2B544"></i>波向（主要成分）</span><span><i style="background:var(--text)"></i>風向</span></div>'+
+    '<p class="note">矢印は向きだけを示します。長さは風速・波高に比例しません。</p>';
 }
 // 1日の波のグラフ(縦軸はスネ〜アタマ)と潮位
 function chart(rows, now){
@@ -282,8 +377,8 @@ function chart(rows, now){
     const hh = (r.a || 0)/mx*H, night = isNight(r);
     s += '<rect x="' + (L+i*cw+4) + '" y="' + (top+H-hh) + '" width="' + (cw-8) + '" height="' + hh + '" rx="4" fill="' + ramp(r.a || 0) + '" opacity="' + (night || r.t < now ? .4 : 1) + '"/>';
   });
-  const best = bestOf(daytime(rows)), bi = best ? rows.indexOf(best) : -1;
-  if(bi >= 0){ const x0 = L + Math.max(0, bi-1)*cw + 1; s += '<rect x="' + x0 + '" y="' + (top-4) + '" width="' + (cw*3-2) + '" height="' + (H+8) + '" rx="10" fill="none" stroke="#F2B544" stroke-width="2"/><text x="' + (x0+cw*1.5) + '" y="11" text-anchor="middle" font-size="12" fill="#F2B544">おすすめ</text>'; }
+  const best = bestRecommendation(rows, now), bi = best ? rows.indexOf(best) : -1;
+  if(bi >= 0){ const x0 = L + bi*cw + 2; s += '<rect x="' + x0 + '" y="' + (top-4) + '" width="' + (cw-4) + '" height="' + (H+8) + '" rx="7" fill="none" stroke="var(--sun)" stroke-width="2.5"/><text x="' + (x0+(cw-4)/2) + '" y="11" text-anchor="middle" font-size="11" fill="var(--sun)">' + boardScore(best) + '点</text>'; }
   const ni = rows.findIndex(r => r.t === now);
   if(ni >= 0) s += '<line x1="' + (L+(ni+.5)*cw) + '" x2="' + (L+(ni+.5)*cw) + '" y1="' + top + '" y2="' + (tt+th) + '" stroke="#E9F1FA" stroke-dasharray="3 4" opacity=".6"/>';
   const tv = rows.map(r => r.tide).filter(v => v != null);
@@ -337,6 +432,19 @@ function spark(dt, mx, sel){
   return '<svg class="spark" viewBox="0 0 ' + (dt.length*(w+g)) + ' 28" preserveAspectRatio="none">' + dt.map((x,i) => { const h = Math.max(1, (x.a || 0)/mx*26); return '<rect x="' + i*(w+g) + '" y="' + (28-h) + '" width="' + w + '" height="' + h + '" rx="1.5" fill="' + (sel ? '#06122A' : ramp(x.a || 0)) + '"/>'; }).join('') + '</svg>';
 }
 
+function sourcePanel(p){
+  const source=p.sources;
+  const at=(g) => g && g.lat != null && g.lon != null ? Number(g.lat).toFixed(4)+'°N, '+Number(g.lon).toFixed(4)+'°E' : '座標未収録';
+  const safe=(x) => String(x==null?'—':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const rows = !source ? '<tr><td colspan="3">旧形式の予報データです。新しい forecast.py を実行すると、各モデルの参照格子点座標を表示できます。</td></tr>' : [
+    ['波浪・水温', source.marine],['海面高度（潮位の参考値）', source.tide],['風向・風速', source.wind],['天気・気温', source.weather]
+  ].map(([name,x])=>'<tr><th>'+name+'</th><td>'+safe(x?.provider)+'</td><td>'+safe(at(x?.grid))+'</td></tr>').join('');
+  return '<details class="source-panel"><summary>データの出典・参照地点（格子点）</summary>'+
+    '<p>対象ポイント設定座標：'+safe(at(source?.query_location||p))+'。下表はAPI応答に含まれる参照格子点の代表座標です。</p>'+
+    '<table><thead><tr><th>データ</th><th>提供元・モデル</th><th>参照座標</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<p>※海面高度はOpen-Meteo Marineのモデル値（平均海面基準）で、港の検潮所の観測潮位ではありません。実際の格子点位置・利用モデルはAPIの応答・選択に依存します。<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Marine API</a> / <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Weather API</a></p></details>';
+}
+
 function view(p, rows){
   const now = jstNow(); let ni = rows.findIndex(r => r.t >= now); if(ni < 0) ni = 0;
   NOWT = now;
@@ -347,27 +455,31 @@ function view(p, rows){
   const dateMark = '<div class="series-date"><span>対象日</span><b>' + selectedDate + '</b><span class="zone">日本時間（JST）</span></div>';
   const tide = r.tide == null ? '--' : Math.round(r.tide*100) + 'cm ' + (r.tideNext != null && r.tideNext > r.tide ? '上げ' : '下げ');
   const wk = Math.max(0.5, ...rows.filter(x => hourOf(x.t) >= 5 && hourOf(x.t) <= 18).map(x => x.a || 0));
-  const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestOf(dt);
-    return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + (b ? scoreBadge(boardScore(b), 'day') : '') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + (b ? 'おすすめ ' + hourOf(b.t) + '時' : '') + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero') + expertFlag(r.a, 'inline') +
+  const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestRecommendation(d.rows, now);
+    return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + (b ? scoreBadge(boardScore(b), 'day') : '') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + (b ? 'おすすめ ' + hourOf(b.t) + '時・' + boardScore(b) + '点' : 'おすすめ枠なし') + '</span></button>'; }).join('');
+  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
     '<dl class="stats"><div><dt>岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>潮位</dt><dd>' + tide + '</dd></div><div><dt>水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div><h2 class="series-heading">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">「面」の青い帯は水面の良さ（濃いほど良い）</small></h2><div class="panel">' + dateMark + '<p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + recommendView(ds[di].rows, now) + '<h2 class="series-heading">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">「面」の青い帯は水面の良さ（濃いほど良い）</small></h2><div class="panel">' + dateMark + '<p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
     '<h2 class="series-heading">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + table(ds[di].rows) + '</div>' +
-    '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div></div>';
+    '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
 const app = document.getElementById('app');
 let initialBoard = 'short';
 try { if(localStorage.getItem('umiten-board') === 'long') initialBoard = 'long'; } catch(_) {}
-const state = {pi:0, day:0, board:initialBoard, data:{}, err:null, at:''};
+let initialTheme = 'dark';
+try { const saved=localStorage.getItem('umiten-theme'); if(['dark','light','ocean','sunset'].includes(saved)) initialTheme=saved; } catch(_) {}
+const state = {pi:0, day:0, board:initialBoard, theme:initialTheme, data:{}, err:null, at:''};
+document.documentElement.dataset.theme=state.theme;
 function render(){
   const p = POINTS[state.pi], rows = state.data[p.id];
   const tabs = '<nav class="tabs" aria-label="ポイント">' + POINTS.map((q,i) => '<button data-point="' + i + '" aria-pressed="' + (i === state.pi) + '">' + q.name + '</button>').join('') + '</nav>' +
     '<div class="board-switch"><span class="board-label">ボードに合わせた予報</span><div class="board-buttons" role="group" aria-label="ボードの種類">' +
     ['short','long'].map(b => '<button data-board="' + b + '" aria-pressed="' + (state.board === b) + '">' + (b === 'short' ? 'ショート' : 'ロング') + '</button>').join('') +
-    '</div></div>';
+    '</div></div><div class="theme-picker"><label for="theme-select">表示テーマ</label><select id="theme-select" aria-label="表示テーマ">' +
+    [['dark','ダーク'],['light','ライト'],['ocean','オーシャン'],['sunset','サンセット']].map(([v,l]) => '<option value="' + v + '"' + (state.theme===v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>';
   let parts = ['', ''];
   if(state.err) parts[0] = '<div class="wrap"><p class="msg">データを取得できませんでした。<br>' + state.err + '</p></div>';
   else if(!rows) parts[0] = '<div class="wrap"><p class="msg">波のデータを取得中です…</p></div>';
@@ -382,10 +494,17 @@ app.addEventListener('click', e => {
   else if(t.dataset.day != null){ state.day = +t.dataset.day; render(); }
   else if(t.dataset.board != null){ state.board = t.dataset.board; try{localStorage.setItem('umiten-board',state.board);}catch(_){} render(); }
 });
+app.addEventListener('change', e => {
+  if(e.target.id === 'theme-select'){
+    state.theme=e.target.value; document.documentElement.dataset.theme=state.theme;
+    try { localStorage.setItem('umiten-theme',state.theme); } catch(_) {}
+    render();
+  }
+});
 async function init(){
   try{
     const j = await (await fetch('data/forecast.json', {cache:'no-cache'})).json();
-    POINTS = j.points.map(p => ({id:p.id, name:p.name, facing:p.facing, lat:p.lat, lon:p.lon}));
+    POINTS = j.points.map(p => ({id:p.id, name:p.name, facing:p.facing, lat:p.lat, lon:p.lon, sources:p.sources||null}));
     j.points.forEach(p => state.data[p.id] = p.rows);
     state.at = (j.generated_at || '').slice(11,16); state.gen = j.generated_at || '';
     select(0);

@@ -191,21 +191,34 @@ def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=N
     return max(0, min(100, round(min(raw, size_cap, period_cap, wind_cap))))
 
 
+def source_grid(payload):
+    """Open-Meteo API の応答に含まれる代表格子点座標。観測所の位置ではない。"""
+    lat, lon = payload.get("latitude"), payload.get("longitude")
+    return {"lat": round(float(lat), 5) if lat is not None else None,
+            "lon": round(float(lon), 5) if lon is not None else None}
+
+
 def forecast(p):
     q = urllib.parse.urlencode({"latitude": p["lat"], "longitude": p["lon"], "timezone": "Asia/Tokyo", "forecast_days": 7})
-    m = get(f"https://marine-api.open-meteo.com/v1/marine?{q}&hourly={MARINE}")["hourly"]
+    marine_response = get(f"https://marine-api.open-meteo.com/v1/marine?{q}&hourly={MARINE}")
+    m = marine_response["hourly"]
     wq = f"https://api.open-meteo.com/v1/forecast?{q}&hourly=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&past_days=1"   # 前日分は、風向きの変化の履歴(面のラグ)の計算用
     try:
-        w = get(wq + "&models=jma_seamless")["hourly"]          # 気象庁モデル
+        wind_response = get(wq + "&models=jma_seamless")
+        w = wind_response["hourly"]
         assert any(v is not None for v in w["wind_speed_10m"])
+        wind_model = "Open-Meteo / JMA Seamless（気象庁モデル）"
     except Exception:
-        w = get(wq)["hourly"]
+        wind_response = get(wq)
+        w = wind_response["hourly"]
+        wind_model = "Open-Meteo / 自動選択モデル（JMA優先取得失敗時）"
     wi = {t: i for i, t in enumerate(w["time"])}
     try:   # 天気と気温(表示用。取れなくても続行)
-        x = get(f"https://api.open-meteo.com/v1/forecast?{q}&hourly=temperature_2m,weather_code")["hourly"]
+        weather_response = get(f"https://api.open-meteo.com/v1/forecast?{q}&hourly=temperature_2m,weather_code")
+        x = weather_response["hourly"]
         xi = {t: i for i, t in enumerate(x["time"])}
     except Exception:
-        x, xi = None, {}
+        weather_response, x, xi = None, None, {}
     facing, depth, scale = p["facing"], p.get("depth_m", 4.0), p.get("scale", 1.0)
     up, down = p.get("lag_up_h", LAG_UP), p.get("lag_down_h", LAG_DOWN)
     wqs = [wind_quality(w["wind_speed_10m"][j], w["wind_direction_10m"][j], facing) for j in range(len(w["time"]))]
@@ -238,14 +251,28 @@ def forecast(p):
                      "wv": [g("wave_height"), g("wave_period"), g("wave_direction")], "ww": [g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction")],
                      "sw": [g("swell_wave_height"), g("swell_wave_period"), g("swell_wave_direction")], "sw2": [g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")],
                      "comps": [[round(h, 2), round(T, 1) if T else None, round(d) if d is not None else None, round(sh[0], 2)] for (h, T, d), sh in zip(comps, shore)]})
-    return rows
+    sources = {
+        "query_location": {"lat": p["lat"], "lon": p["lon"]},
+        "marine": {"provider": "Open-Meteo Marine", "grid": source_grid(marine_response),
+                   "parameters": "波浪・うねり・海面水温・海面高度（モデル値）"},
+        "tide": {"provider": "Open-Meteo Marine / sea_level_height_msl", "grid": source_grid(marine_response),
+                 "description": "平均海面基準のモデル海面高度。潮汐観測所の実測潮位ではありません"},
+        "wind": {"provider": wind_model, "grid": source_grid(wind_response),
+                 "parameters": "地上10m風速・風向"},
+        "weather": {"provider": "Open-Meteo Forecast / 自動選択モデル" if weather_response else "取得なし",
+                    "grid": source_grid(weather_response) if weather_response else None,
+                    "parameters": "地上2m気温・天気コード"},
+    }
+    return rows, sources
 
 def main():
     points = json.loads((ROOT / "points.json").read_text(encoding="utf-8"))
     out = {"generated_at": datetime.datetime.now(JST).isoformat(timespec="minutes"), "points": []}
     for p in points:
         try:
-            out["points"].append({"id": p["id"], "name": p["name"], "lat": p["lat"], "lon": p["lon"], "facing": p["facing"], "rows": forecast(p)})
+            rows, sources = forecast(p)
+            out["points"].append({"id": p["id"], "name": p["name"], "lat": p["lat"], "lon": p["lon"],
+                                  "facing": p["facing"], "rows": rows, "sources": sources})
         except Exception as e:
             print("skip", p["id"], e, file=sys.stderr)
         time.sleep(0.5)
