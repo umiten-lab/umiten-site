@@ -114,27 +114,50 @@ def wind_score_cap(kind, spd):
     return max(floor, round(base - loss * max(0.0, spd - start)))
 
 
-def score(a, per, q, kind=None, spd=None):
-    """波の総合スコア(0–100)。風・面70点、サイズ20点、周期10点。
+# 日本式の波サイズ表記(当サイトの簡易岸波高に対応させた暫定値)
+# ショートは胸〜肩(中心1.35 m)、ロングは腹〜胸(中心1.08 m)。
+BOARD_PROFILES = {
+    "short": {"mu": 1.35, "sigma": 0.48},
+    "long":  {"mu": 1.08, "sigma": 0.38},
+}
 
-    方向による厳しい上限を設け、オンショアで高得点になりにくい仕様。
-    試験的な経験則であり、観測・サーフィン記録による検証は未実施。
+
+def size_suitability(a, board="short"):
+    """正規分布の指数部を利用したサイズ適合度 (0–1)。統計的な確率ではない。"""
+    if a is None:
+        return None
+    profile = BOARD_PROFILES[board]
+    return math.exp(-0.5 * ((max(0.0, a) - profile["mu"]) / profile["sigma"]) ** 2)
+
+
+def score(a, per, q, kind=None, spd=None, board="short"):
+    """板種別の波予報スコア。面70点・サイズ20点・周期10点にサイズ適合度を適用。
+
+    加算だけではモモやコシの小波に高得点がつくため、
+    波サイズの正規分布型の適合度で総合点も抑制する。
+    風向・風速の上限は引き続き適用。すべて試験的な経験則。
     """
     if a is None or q is None or kind is None or spd is None:
         return None
     a = max(0.0, a)
     q = max(0.0, min(1.0, q))
+    fit = size_suitability(a, board)
     period_points = 10 if per >= 10 else 7 if per >= 8 else 3 if per >= 6 else 0
-    # サイズ不足の日は面・周期の得点も抑制
-    height_factor = min(1.0, (a / 0.6) ** 1.25)
-    raw = min(1.5, a) / 1.5 * 20 + (q * 70 + period_points) * height_factor
-    # 小波の過大評価を防ぐ上限。幅広い板向けには別途チューニング余地がある。
-    size_cap = (40 if a < 0.35 else
-                60 if a < 0.50 else
-                75 if a < 0.65 else
-                100)
-    cap = wind_score_cap(kind, spd)
-    return max(0, min(100, round(min(raw, size_cap, cap))))
+    # 基礎点は風・面を最重視。そのうえでサイズ適合度を二重に反映。
+    base = 70 * q + 20 * fit + period_points
+    raw = base * (0.35 + 0.65 * fit)
+
+    # モモやコシでは良い風でも◎を出さない。サイズ境界は暫定値。
+    size_cap = (25 if a < 0.35 else
+                35 if a < 0.50 else
+                39 if a < 0.70 else
+                69 if a < 0.90 else
+                83 if a < 1.00 else 100)
+    # 短い周期で高得点にならないようにする。
+    period_cap = 59 if per < 6 else 79 if per < 8 else 100
+    wind_cap = wind_score_cap(kind, spd)
+    return max(0, min(100, round(min(raw, size_cap, period_cap, wind_cap))))
+
 
 def forecast(p):
     q = urllib.parse.urlencode({"latitude": p["lat"], "longitude": p["lon"], "timezone": "Asia/Tokyo", "forecast_days": 7})
@@ -178,7 +201,7 @@ def forecast(p):
         kind = wind_kind(wd, facing)
         tide, nxt = g("sea_level_height_msl"), (m["sea_level_height_msl"][i + 1] if i + 1 < len(m["time"]) else None)
         rows.append({"t": t, "h": tot, "a": round(a, 2), "per": top[1], "wdir": top[2], "sst": g("sea_surface_temperature"),
-                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd), "q": round(Q[t], 2) if Q.get(t) is not None else None,
+                     "tide": tide, "tideNext": nxt, "spd": spd, "dir": wd, "kind": kind, "score": score(a, top[1] or 0, Q.get(t), kind, spd, "short"), "score_short": score(a, top[1] or 0, Q.get(t), kind, spd, "short"), "score_long": score(a, top[1] or 0, Q.get(t), kind, spd, "long"), "q": round(Q[t], 2) if Q.get(t) is not None else None,
                      "tmp": x["temperature_2m"][xi[t]] if x and t in xi else None, "wx": x["weather_code"][xi[t]] if x and t in xi else None,
                      "wv": [g("wave_height"), g("wave_period"), g("wave_direction")], "ww": [g("wind_wave_height"), g("wind_wave_period"), g("wind_wave_direction")],
                      "sw": [g("swell_wave_height"), g("swell_wave_period"), g("swell_wave_direction")], "sw2": [g("secondary_swell_wave_height"), g("secondary_swell_wave_period"), g("secondary_swell_wave_direction")],
