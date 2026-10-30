@@ -272,7 +272,7 @@ def main():
         try:
             rows, sources = forecast(p)
             out["points"].append({"id": p["id"], "name": p["name"], "lat": p["lat"], "lon": p["lon"],
-                                  "facing": p["facing"], "rows": rows, "sources": sources})
+                                  "facing": p["facing"], "map_url": p.get("map_url"), "facing_source": p.get("facing_source"), "rows": rows, "sources": sources})
         except Exception as e:
             print("skip", p["id"], e, file=sys.stderr)
         time.sleep(0.5)

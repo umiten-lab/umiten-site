@@ -258,6 +258,40 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .stat-icon--tide{color:var(--sun)}
 .stat-icon--temp{color:var(--sun)}
 @media(max-width:360px){.stats dt{gap:5px}.stat-icon,.stat-icon svg{width:17px;height:17px;flex-basis:17px}}
+
+/* 時系列の横スクロールで項目名が消えないようにする */
+.chart{min-width:1016px}
+.grid .cl{
+  position:sticky;left:0;z-index:5;
+  background:var(--panel);color:var(--text);
+  font-size:11px;font-weight:700;padding:0 4px;
+  border-right:1px solid var(--line);white-space:nowrap;
+  box-shadow:3px 0 7px rgba(0,0,0,.15)
+}
+/* グラフの凡例は左端に残す */
+.series-key{
+  position:sticky;left:0;z-index:6;max-width:max-content;
+  display:flex;align-items:center;gap:12px;
+  padding:5px 10px;margin:5px 0 8px;
+  background:var(--panel);color:var(--text);
+  border:1px solid var(--line);border-radius:8px;
+  font-size:12px;font-weight:700;white-space:nowrap;
+}
+/* 詳細表は先頭の時刻列を固定 */
+.tbw .tb th:first-child,.tbw .tb td:first-child{
+  position:sticky;left:0;z-index:3;
+  background:var(--panel);border-right:1px solid var(--line);
+  box-shadow:3px 0 7px rgba(0,0,0,.14)
+}
+.tbw .tb tr.nt td:first-child{background:var(--panel)}
+.spot-map{
+  display:inline-block;color:var(--sun);font-size:12px;
+  margin-left:8px;text-decoration:underline;text-underline-offset:3px;
+}
+@media(max-width:760px){
+ .chart{min-width:1016px}
+ .series-key{gap:9px;font-size:11px;max-width:calc(100vw - 44px)}
+}
 </style>
 </head>
 <body>
@@ -517,6 +551,7 @@ function sourcePanel(p){
   return '<details class="source-panel"><summary>データの出典・参照地点（格子点）</summary>'+
     '<p>対象ポイント設定座標：'+safe(at(source?.query_location||p))+'。下表はAPI応答に含まれる参照格子点の代表座標です。</p>'+
     '<table><thead><tr><th>データ</th><th>提供元・モデル</th><th>参照座標</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<p>海岸の代表方位：海側へ'+safe(p.facing == null ? '不明' : p.facing+'°')+'（北を0°として時計回り）。風向評価の設定値であり、砂州などの局所的な向きは反映しません。'+(p.facing_source ? ' <a href="'+safe(p.facing_source)+'" target="_blank" rel="noopener noreferrer">方位の参考資料</a>' : '')+'</p>'+
     '<p>※海面高度はOpen-Meteo Marineのモデル値（平均海面基準）で、港の検潮所の観測潮位ではありません。実際の格子点位置・利用モデルはAPIの応答・選択に依存します。<a href="https://open-meteo.com/en/docs/marine-weather-api" target="_blank" rel="noopener">Marine API</a> / <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Weather API</a></p></details>';
 }
 
@@ -533,12 +568,12 @@ function view(p, rows){
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestRecommendation(d.rows, now), ref = dailyRatingRow(d.rows), rated = b || ref;
     const status = b ? 'おすすめ ' + hourOf(b.t) + '時・' + boardScore(b) + '点' : 'おすすめ枠なし' + (ref ? '／' + (isSafeDaylightHour(ref) ? '日中最高' : '参考') + ' ' + boardScore(ref) + '点' : '／予報データなし');
     return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + scoreBadge(boardScore(rated), 'day') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + status + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
+  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + (p.map_url ? ' <a class="spot-map" href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">地図を見る ↗</a>' : '') + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now)) + expertFlag(r.a, 'inline') +
     '<dl class="stats"><div><dt>' + statIcon('shore') + '岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>' + statIcon('offshore') + '沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>' + statIcon('period') + '周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + recommendView(ds[di].rows, now) + '<h2 class="series-heading">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">「面」の青い帯は水面の良さ（濃いほど良い）</small></h2><div class="panel">' + dateMark + '<p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2 class="series-heading">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + table(ds[di].rows) + '</div>' +
+    '<div class="wrap">' + recommendView(ds[di].rows, now) + '<h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">「面」の青い帯は水面の良さ（濃いほど良い）</small></h2><div class="panel">' + dateMark + '<p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<h2 class="series-heading">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + table(ds[di].rows) + '</div>' +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
@@ -585,7 +620,7 @@ app.addEventListener('change', e => {
 async function init(){
   try{
     const j = await (await fetch('data/forecast.json', {cache:'no-cache'})).json();
-    POINTS = j.points.map(p => ({id:p.id, name:p.name, facing:p.facing, lat:p.lat, lon:p.lon, sources:p.sources||null}));
+    POINTS = j.points.map(p => ({id:p.id, name:p.name, facing:p.facing, lat:p.lat, lon:p.lon, map_url:p.map_url||null, facing_source:p.facing_source||null, sources:p.sources||null}));
     j.points.forEach(p => state.data[p.id] = p.rows);
     state.at = (j.generated_at || '').slice(11,16); state.gen = j.generated_at || '';
     select(0);
