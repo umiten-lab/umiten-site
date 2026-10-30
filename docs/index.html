@@ -752,9 +752,19 @@ function adviceFor(current, rows, now){
   // 夜は×にするのではなく、波の総合点はそのまま保持する。
   // 総合欄のコメントだけ、安全上の理由で入水は勧めない表現に変える。
   if(light === 'after-sunset'){
-    if(currentScore != null && currentScore >= 70) return 'いやどうも！ 波はいいんだけど、もう真っ暗だな。今日はやめとくべ。';
-    if(currentScore != null && currentScore >= 55) return '波はまずまず。でも、もう暗いな。今日はやめとくべ。';
-    return 'もう暗くなったな。波の評価はそのまま、入るのはまた明日だな。';
+    // 日没後も波の点数は変更しない。コメントでは翌朝に備える提案をする。
+    // 翌日の波が良いとは限らないため、翌日のコンディションは断定しない。
+    if(currentScore != null && currentScore >= 85)
+      return 'いやどうも！ 波は最高だけど、もう真っ暗だな。早く寝て明日に備えっぺ！';
+    if(currentScore != null && currentScore >= 70)
+      return 'いやどうも！ 波はいい感じだな。でももう暗いし、早く寝て明日に備えっぺ！';
+    if(currentScore != null && currentScore >= 55)
+      return '波はまずまずだな。もう暗いし、今夜はゆっくり休んで明日に備えっぺ。';
+    if(currentScore != null && currentScore >= 40)
+      return '波はちっと厳しいな。今夜は早めに寝て、明日に備えっぺ。';
+    if(currentScore != null)
+      return '今夜は波も厳しそうだな。早めに寝て、明日の予報を見てみっぺ。';
+    return 'もう暗いな。今夜はゆっくり休んで、明日の予報を見てみっぺ。';
   }
   const upcoming = rows.filter(r => r.t.slice(0,10) === today &&
     r.t >= now && isSafeDaylightHour(r) && boardScore(r) != null);
