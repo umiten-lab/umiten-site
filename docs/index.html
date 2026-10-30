@@ -569,6 +569,33 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   #spot-dock{transition:none}
 }
 
+
+/* 現在時刻のマーカー。背景色だけでなく「いま HH:MM」ラベルと実線で識別する。 */
+:root,[data-theme="night"]{
+  --now-accent:#FFD27A;--now-ink:#19243A;--now-halo:rgba(255,210,122,.18);
+}
+[data-theme="sunrise"]{
+  --now-accent:#AE4725;--now-ink:#FFF9F1;--now-halo:rgba(174,71,37,.16);
+}
+[data-theme="daylight"]{
+  --now-accent:#B34D1A;--now-ink:#FFFFFF;--now-halo:rgba(179,77,26,.14);
+}
+[data-theme="sunset"]{
+  --now-accent:#FFCC9C;--now-ink:#302039;--now-halo:rgba(255,204,156,.18);
+}
+[data-theme="midnight"]{
+  --now-accent:#9EE9FF;--now-ink:#081820;--now-halo:rgba(158,233,255,.15);
+}
+.now-indicator .now-shade{fill:var(--now-halo)}
+.now-indicator .now-underlay{stroke:var(--panel);stroke-width:6;opacity:.96}
+.now-indicator .now-rule{stroke:var(--now-accent);stroke-width:2.8}
+.now-indicator .now-end{fill:var(--now-accent);stroke:var(--panel);stroke-width:2}
+.now-indicator .now-chip{fill:var(--now-accent)}
+.now-indicator .now-dot{fill:var(--now-ink)}
+.now-indicator .now-caption{fill:var(--now-ink);font:700 12px 'Noto Sans JP',system-ui,sans-serif;letter-spacing:.01em}
+
+/* 潮位図も波高図と同じ横幅の時間軸にし、スマホで時刻と「いま」を読めるようにする。 */
+.tide-graph{width:1016px;max-width:none;height:164px}
 </style>
 </head>
 <body>
@@ -780,6 +807,45 @@ function compass(r, p){
   return s+'</svg><div class="legend"><span><i style="background:#F2B544"></i>波向（主要成分）</span><span><i style="background:var(--text)"></i>風向</span></div>'+
     '<p class="note">矢印は向きだけを示します。長さは風速・波高に比例しません。</p>';
 }
+
+/*
+ * 現在時刻マーカー（波高・潮位グラフ共通）。
+ * - 数値予報は毎正時の値だが、マーカーは実際の日本時間の「分」まで反映する。
+ * - 例えば 15:30 なら、15時と16時の予報点の中間に描く。
+ * - 対象日が今日以外なら表示しない（翌日のグラフに「いま」を描かない）。
+ * - 背景の帯＋輪郭付き実線＋「いま HH:MM」のラベルで、色覚やテーマに依存しすぎない。
+ */
+function currentTimeMarker(rows, left, cellWidth, y1, y2, chartWidth){
+  if(!rows.length) return '';
+  const clock = new Date();
+  const jst = clock.toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'}).replace(' ','T');
+  const today = jst.slice(0,10);
+  if(rows[0].t.slice(0,10) !== today) return '';
+  const timeMs = clock.getTime();
+  // 入力は「YYYY-MM-DDTHH:MM」（日本時間）。UTCから+09:00で解釈する。
+  const stamps = rows.map(r => Date.parse(r.t.slice(0,16)+'+09:00'));
+  if(stamps.some(t => !Number.isFinite(t))) return '';
+  const lastSpacing = stamps.length > 1 ? Math.max(1,stamps.at(-1)-stamps.at(-2)) : 3600000;
+  if(timeMs < stamps[0] || timeMs >= stamps.at(-1)+lastSpacing) return '';
+  let i=0;
+  while(i<stamps.length-1 && stamps[i+1] <= timeMs) i++;
+  const step = i+1<stamps.length ? Math.max(1,stamps[i+1]-stamps[i]) : lastSpacing;
+  const fraction = Math.min(1,Math.max(0,(timeMs-stamps[i])/step));
+  const x = left+(i+.5+fraction)*cellWidth;
+  const width=94, chipX=Math.max(left+3,Math.min(chartWidth-width-3,x-width/2));
+  const time=jst.slice(11,16);
+  const f=n=>n.toFixed(1);
+  return '<g class="now-indicator" role="img" aria-label="現在の時刻 '+time+'">'+
+    '<rect class="now-shade" x="'+f(x-8)+'" y="'+y1+'" width="16" height="'+(y2-y1)+'" rx="5"/>'+
+    '<line class="now-underlay" x1="'+f(x)+'" x2="'+f(x)+'" y1="'+y1+'" y2="'+y2+'"/>'+
+    '<line class="now-rule" x1="'+f(x)+'" x2="'+f(x)+'" y1="'+y1+'" y2="'+y2+'"/>'+
+    '<circle class="now-end" cx="'+f(x)+'" cy="'+y2+'" r="4"/>'+
+    '<rect class="now-chip" x="'+f(chipX)+'" y="0" width="'+width+'" height="23" rx="11.5"/>'+
+    '<circle class="now-dot" cx="'+f(chipX+12)+'" cy="11.5" r="3.5"/>'+
+    '<text class="now-caption" x="'+f(chipX+22)+'" y="16">いま '+time+'</text>'+
+    '</g>';
+}
+
 // 1日の波のグラフ(縦軸はスネ〜アタマ)と潮位
 function chart(rows, now){
   const W = 1016, L = 56, cw = 40, H = 210, top = 18, tt = 244, th = 44;
@@ -796,13 +862,13 @@ function chart(rows, now){
     s += '<rect x="' + (L+i*cw+4) + '" y="' + (top+H-hh) + '" width="' + (cw-8) + '" height="' + hh + '" rx="4" fill="' + ramp(r.a || 0) + '" opacity="' + (night || r.t < now ? .4 : 1) + '"/>';
   });
   const best = bestRecommendation(rows, now), bi = best ? rows.indexOf(best) : -1;
-  if(bi >= 0){ const x0 = L + bi*cw + 2; s += '<rect x="' + x0 + '" y="' + (top-4) + '" width="' + (cw-4) + '" height="' + (H+8) + '" rx="7" fill="none" stroke="var(--sun)" stroke-width="2.5"/><text x="' + (x0+(cw-4)/2) + '" y="11" text-anchor="middle" font-size="11" fill="var(--sun)">' + boardScore(best) + '点</text>'; }
-  const ni = rows.findIndex(r => r.t === now);
-  if(ni >= 0) s += '<line x1="' + (L+(ni+.5)*cw) + '" x2="' + (L+(ni+.5)*cw) + '" y1="' + top + '" y2="' + (tt+th) + '" stroke="#E9F1FA" stroke-dasharray="3 4" opacity=".6"/>';
+  if(bi >= 0){ const x0 = L + bi*cw + 2; s += '<rect x="' + x0 + '" y="' + (top-4) + '" width="' + (cw-4) + '" height="' + (H+8) + '" rx="7" fill="none" stroke="var(--sun)" stroke-width="2.5"/><text x="' + (x0+(cw-4)/2) + '" y="' + (top+18) + '" text-anchor="middle" font-size="11" font-weight="700" fill="var(--sun)">' + boardScore(best) + '点</text>'; }
   const tv = rows.map(r => r.tide).filter(v => v != null);
   axisLabels += '<span class="wave-axis-label" style="top:' + (tt+th/2) + 'px">潮位</span>';
   if(tv.length){ const a = Math.min(...tv), b = Math.max(...tv), ty = v => tt + th - (v-a)/((b-a)||1)*th; s += '<polyline points="' + rows.map((r,i) => r.tide == null ? null : (L+(i+.5)*cw) + ',' + ty(r.tide)).filter(Boolean).join(' ') + '" fill="none" stroke="#3B8FE0" stroke-width="2.5"/>'; }
-  return '<div class="wave-graph">' + s + '</svg><div class="wave-axis" aria-hidden="true">' + axisLabels + '</div></div>';
+  // 最後に描いて、波・潮位線の上からでも「いま」を確実に見せる。
+  s += currentTimeMarker(rows,L,cw,top,tt+th,W);
+  return '<div class="wave-graph" data-date="' + rows[0].t.slice(0,10) + '">' + s + '</svg><div class="wave-axis" aria-hidden="true">' + axisLabels + '</div></div>';
 }
 function arrow(deg){ return deg == null ? '--' : '<i style="transform:rotate(' + ((deg+180)%360) + 'deg)">↑</i>'; }
 function cells(rows){
@@ -827,14 +893,14 @@ function tideChart(rows, now){
   const v = rows.map(r => r.tide);
   if(v.some(x => x == null)) return '<p class="msg">潮位のデータがありません</p>';
   const W = 1016, L = 56, cw = 40, H = 120, top = 18, a = Math.min(...v), b = Math.max(...v), y = x => top + H - (x-a)/((b-a)||1)*H, X = i => L + (i+.5)*cw;
-  let s = '<svg viewBox="0 0 ' + W + ' ' + (H+top+26) + '" role="img" aria-label="潮位のグラフ">';
+  let s = '<svg class="tide-graph" data-date="' + rows[0].t.slice(0,10) + '" viewBox="0 0 ' + W + ' ' + (H+top+26) + '" role="img" aria-label="潮位のグラフ">';
   rows.forEach((r,i) => { if(isNight(r)) s += '<rect x="' + (L+i*cw) + '" y="' + top + '" width="' + cw + '" height="' + H + '" fill="rgba(169,187,209,.14)"/>'; });
   s += '<path d="M' + X(0) + ' ' + (top+H) + rows.map((r,i) => 'L' + X(i) + ' ' + y(r.tide)).join('') + 'L' + X(rows.length-1) + ' ' + (top+H) + 'Z" fill="rgba(59,143,224,.28)"/><polyline points="' + rows.map((r,i) => X(i) + ',' + y(r.tide)).join(' ') + '" fill="none" stroke="#3B8FE0" stroke-width="2.5"/>';
   rows.forEach((r,i) => { const p = v[i-1], n = v[i+1]; if(i > 0 && i < v.length-1 && ((v[i] > p && v[i] >= n) || (v[i] < p && v[i] <= n))){ const hi = v[i] > p;
     s += '<circle cx="' + X(i) + '" cy="' + y(v[i]) + '" r="4" fill="#F2B544"/><text x="' + X(i) + '" y="' + (hi ? y(v[i]) - 9 : y(v[i]) + 19) + '" text-anchor="middle" font-size="12" fill="#E9F1FA">' + (hi ? '満潮 ' : '干潮 ') + hourOf(r.t) + '時 ' + (v[i] >= 0 ? '+' : '') + Math.round(v[i]*100) + 'cm</text>'; } });
   for(let h = 0; h < 24; h += 3) s += '<text x="' + (L+h*cw) + '" y="' + (top+H+18) + '" font-size="12" fill="#A9BBD1" text-anchor="middle">' + h + '時</text>';
-  const ni = rows.findIndex(r => r.t === now);
-  if(ni >= 0) s += '<line x1="' + X(ni) + '" x2="' + X(ni) + '" y1="' + top + '" y2="' + (top+H) + '" stroke="#E9F1FA" stroke-dasharray="3 4" opacity=".6"/>';
+  // 波高と同じ「いま」ラベル・色で現在時刻の境界を示す。
+  s += currentTimeMarker(rows,L,cw,top,top+H,W);
   return s + '</svg><p class="note">潮位は平均海面からの高さ(モデル値)。灰色の時間帯は日没後です(日の出 ' + hm(SUN[0]) + '、日の入り ' + hm(SUN[1]) + ')。</p>';
 }
 const WX = c => c == null ? '' : c === 0 ? '☀' : c <= 2 ? '🌤' : c === 3 ? '☁' : c <= 48 ? '🌫' : c <= 67 ? '🌧' : c <= 77 ? '❄' : c <= 82 ? '🌦' : '⛈';
@@ -979,11 +1045,54 @@ function render(){
   else if(!rows) parts[0] = '<div class="wrap"><p class="msg">波のデータを取得中です…</p></div>';
   else parts = view(p, rows).split('|SPLIT|');
   app.innerHTML = '<div class="hero"><img src="' + WAVE + '" alt=""><div class="wrap"><div class="top"><img class="logo" src="' + (UMITEN_LOGOS[state.theme] || UMITEN_LOGOS.night) + '" alt="海点 UMITEN"></div>' + tabs + '</div>' + parts[0] + '</div>' + (parts[1] || '');
+  // スマホは現在位置が横スクロールの外に隠れないよう、横方向だけ移動する。
+  scrollChartsToNow();
   const nowPanel=app.querySelector('.now');
   const statistics=nowPanel?.querySelector('.stats');
   if(nowPanel && statistics) nowPanel.appendChild(statistics);
   document.getElementById('foot').innerHTML = '波・潮・水温・風のデータ: Open-Meteo.com(CC BY 4.0)。風は気象庁のモデルを優先して使います。岸の波高は、沖の波を屈折・浅水変形で岸に近づけた簡易計算で、評価は試験運用中の参考情報です。安全は現地の海況を確認して判断してください。' + (state.at ? ' 更新 ' + state.at : '') + ((Date.now() - Date.parse(state.gen)) > 12*36e5 ? '(データが古いので、予想を更新してください)' : '');
 }
+/*
+ * スマホで「いま」が初期画面の外にある場合、横スクロールの初期位置を調整。
+ * 固定された波高ラベルを避け、現在線が左から約140pxに来る。
+ */
+function scrollChartsToNow(){
+  if(window.innerWidth > 760) return;
+  app.querySelectorAll('.now-indicator').forEach(marker=>{
+    const panel=marker.closest('.panel');
+    const line=marker.querySelector('.now-rule');
+    if(!panel || !line || panel.scrollWidth <= panel.clientWidth) return;
+    const x=Number(line.getAttribute('x1'));
+    if(Number.isFinite(x)) panel.scrollLeft=Math.max(0,x-140);
+  });
+}
+/*
+ * 開いたままでも「いま」の文字と線は毎分更新する。
+ * ページ全体を描き直すと縦スクロール位置が失われるため、SVGの目印だけ更新。
+ */
+function refreshCurrentTimeOverlays(){
+  if(state.err || !POINTS[state.pi]) return;
+  const all=state.data[POINTS[state.pi].id];
+  if(!all) return;
+  const dataByDay=days(all);
+  const update=(svg,shownDate,yEnd)=>{
+    if(!svg) return;
+    const existing=svg.querySelector('.now-indicator');
+    if(existing) existing.remove();
+    const selected=dataByDay.find(d=>d.date===shownDate);
+    if(!selected) return;
+    const markup=currentTimeMarker(selected.rows,56,40,18,yEnd,1016);
+    if(markup) svg.insertAdjacentHTML('beforeend',markup);
+  };
+  const wave=app.querySelector('.wave-graph');
+  update(wave?.querySelector('svg'),wave?.dataset.date,288);
+  const tide=app.querySelector('.tide-graph');
+  update(tide,tide?.dataset.date,138);
+}
+setInterval(refreshCurrentTimeOverlays,60*1000);
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') refreshCurrentTimeOverlays();
+});
 function select(i){ state.pi = i; state.day = 0; render(); syncPointDock(); }
 app.addEventListener('click', e => {
   const t = e.target.closest('button'); if(!t) return;
