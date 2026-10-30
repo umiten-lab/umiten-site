@@ -1,5 +1,5 @@
 [
   {"id":"onuki-tsurukame","name":"大貫つるかめ","pref":"茨城","lat":36.2986,"lon":140.564,"facing":135,"depth_m":4,"scale":0.75,"note":"大洗サンビーチの第2サンビーチ。堤防の遮蔽は未反映"},
-  {"id":"otake","name":"大竹海岸","pref":"茨城","lat":36.165,"lon":140.60,"facing":95,"depth_m":4,"scale":0.75,"note":"座標・向きは仮。Surf lifeの取得結果で直す"},
-  {"id":"topsante","name":"とっぷさんて","pref":"茨城","lat":36.09,"lon":140.63,"facing":100,"depth_m":4,"scale":0.75,"note":"座標・向きは仮。Surf lifeの取得結果で直す"}
+  {"id":"otake","name":"大竹海岸","pref":"茨城","lat":36.165,"lon":140.60,"facing":95,"depth_m":4,"scale":0.75,"note":"座標・向きは仮。"},
+  {"id":"topsante","name":"とっぷさんて","pref":"茨城","lat":36.09,"lon":140.63,"facing":100,"depth_m":4,"scale":0.75,"note":"座標・向きは仮。"}
 ]
