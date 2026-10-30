@@ -165,6 +165,15 @@ img{max-width:100%}
  .score-copy strong{font-size:14px}
  .rating-key{max-width:100%;font-size:11px}
 }
+/* The date is explicit on each independently scrollable forecast section. */
+.series-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px 14px}
+.series-heading .date-label{display:inline-block;font-size:14px;line-height:1.5;font-weight:700;color:var(--sun);white-space:nowrap}
+.series-date{display:inline-flex;gap:8px;align-items:center;margin:0 0 12px;padding:6px 12px;
+  border:1px solid rgba(242,181,68,.3);border-radius:8px;background:rgba(242,181,68,.09);
+  font-size:13px;font-weight:600;color:var(--text)}
+.series-date b{color:var(--sun);font-weight:700}
+.series-date .zone{font-size:11px;color:var(--sub);font-weight:400}
+@media(max-width:760px){.series-heading .date-label{font-size:13px}.series-date{font-size:12px;flex-wrap:wrap;gap:4px 7px}}
 </style>
 </head>
 <body>
@@ -217,6 +226,8 @@ function fmt(v,n){ return v == null ? '--' : Number(v).toFixed(n); }
 function jstNow(){ return new Date().toLocaleString('sv-SE', {timeZone:'Asia/Tokyo'}).slice(0,13).replace(' ','T') + ':00'; }
 function hourOf(t){ return +t.slice(11,13); }
 function dayLabel(d){ const [y,m,dd] = d.split('-').map(Number); return m + '/' + dd + '(' + '日月火水木金土'[new Date(Date.UTC(y,m-1,dd)).getUTCDay()] + ')'; }
+function fullDate(d){ const [y,m,dd] = d.split('-').map(Number); return y + '年' + m + '月' + dd + '日（' + '日月火水木金土'[new Date(Date.UTC(y,m-1,dd)).getUTCDay()] + '）'; }
+function forecastTime(t){ return fullDate(t.slice(0,10)) + ' ' + t.slice(11,16) + ' JST'; }
 function ramp(h){ const t = Math.min(1, Math.max(0, (h - 0.2)/1.4)), a = [43,108,176], b = [242,181,68]; return 'rgb(' + a.map((v,i) => Math.round(v + (b[i]-v)*t)).join(',') + ')'; }
 // 面(水面の状態)。風の向きと強さから
 function face(r){
@@ -317,7 +328,7 @@ const WX = c => c == null ? '' : c === 0 ? '☀' : c <= 2 ? '🌤' : c === 3 ? '
 // Surf life のような、2時間ごとの詳細表
 function table(rows){
   const w = (m, heat) => !m || m[0] == null ? '<td>--</td>' : '<td' + (heat ? ' style="background:' + ramp(m[0]).replace('rgb','rgba').replace(')',',.35)') + '"' : '') + '>' + fmt(m[0],1) + 'm / ' + fmt(m[1],0) + 's <small>' + dir16(m[2]) + '</small></td>';
-  return '<div class="tbw"><table class="tb"><tr><th>時間</th><th>総合評価</th><th>天気</th><th>気温</th><th>潮位</th><th>海水温</th><th>風</th><th>波高</th><th>風波</th><th>うねり</th><th>うねり2</th></tr>' +
+  return '<div class="tbw"><table class="tb"><tr><th>時刻</th><th>総合評価</th><th>天気</th><th>気温</th><th>潮位</th><th>海水温</th><th>風</th><th>波高</th><th>風波</th><th>うねり</th><th>うねり2</th></tr>' +
     rows.filter(r => hourOf(r.t) % 2 === 0 && r.t >= NOWT).map(r => '<tr' + (isNight(r) ? ' class="nt"' : '') + '><td>' + hourOf(r.t) + '</td><td>' + scoreBadge(boardScore(r), 'table') + expertFlag(r.a, 'table') + '</td><td>' + WX(r.wx) + '</td><td>' + (r.tmp == null ? '--' : Math.round(r.tmp) + '℃') + '</td><td>' + (r.tide == null ? '--' : Math.round(r.tide*100) + 'cm') + '</td><td>' + fmt(r.sst,1) + '℃</td>' +
       '<td style="background:' + windBg(r.kind) + '">' + fmt(r.spd,1) + 'm/s <small>' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '</small></td>' + w(r.wv, true) + w(r.ww) + w(r.sw) + w(r.sw2) + '</tr>').join('') + '</table></div>';
 }
@@ -332,16 +343,18 @@ function view(p, rows){
   const ds = days(rows).filter(d => d.date >= now.slice(0,10));
   if(!ds.length) return '<div class="wrap"><p class="msg">予想データが古くなっています。start.sh で予想を更新してください。</p></div>|SPLIT|';
   const r = rows[ni], di = Math.min(state.day, ds.length - 1); SUN = sun(ds[di].date, p.lat, p.lon);
+  const selectedDate = fullDate(ds[di].date);
+  const dateMark = '<div class="series-date"><span>対象日</span><b>' + selectedDate + '</b><span class="zone">日本時間（JST）</span></div>';
   const tide = r.tide == null ? '--' : Math.round(r.tide*100) + 'cm ' + (r.tideNext != null && r.tideNext > r.tide ? '上げ' : '下げ');
   const wk = Math.max(0.5, ...rows.filter(x => hourOf(x.t) >= 5 && hourOf(x.t) <= 18).map(x => x.a || 0));
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestOf(dt);
     return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + (b ? scoreBadge(boardScore(b), 'day') : '') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + (b ? 'おすすめ ' + hourOf(b.t) + '時' : '') + '</span></button>'; }).join('');
-  return '<div class="wrap"><section class="now"><div><p class="lead">いまの' + p.name + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero') + expertFlag(r.a, 'inline') +
+  return '<div class="wrap"><section class="now"><div><p class="lead">' + p.name + ' の予報｜' + forecastTime(r.t) + '</p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero') + expertFlag(r.a, 'inline') +
     '<dl class="stats"><div><dt>岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>潮位</dt><dd>' + tide + '</dd></div><div><dt>水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div><h2>' + dayLabel(ds[di].date) + ' の波<small class="n">「面」の青い帯は、風の向きと強さの履歴から見た水面の良さ(濃いほど良い)</small></h2><div class="panel"><p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2>潮位</h2><div class="panel">' + tideChart(ds[di].rows, now) + '</div><h2>時間ごとの詳細(2時間ごと)</h2><div class="panel">' + table(ds[di].rows) + '</div>' +
+    '<div class="wrap"><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div><h2 class="series-heading">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">「面」の青い帯は水面の良さ（濃いほど良い）</small></h2><div class="panel">' + dateMark + '<p class="scroll-hint">← 表を横にスワイプして時間帯を確認 →</p><div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<h2 class="series-heading">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel">' + dateMark + table(ds[di].rows) + '</div>' +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div></div>';
 }
 

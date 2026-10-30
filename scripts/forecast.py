@@ -129,7 +129,7 @@ BOARD_PROFILES = {
 # 風向の正規分布型評価（角度はオフショア中心からのずれ）。
 # ロングは鋭いピーク、ショートは広めのピークを与える。
 # 数値は海点の暫定的なサーフ適性パラメータで、観測で校正したものではない。
-WIND_DIRECTION_SIGMA = {"short": 65.0, "long": 45.0}  # degree; ロングはほどよく鋭く
+WIND_DIRECTION_SIGMA = {"short": 80.0, "long": 60.0}  # degree; ショートは広め、ロングはやや鋭め
 
 
 def offshore_suitability(frm, facing, spd, board="short"):
