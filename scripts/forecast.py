@@ -8,7 +8,9 @@
 3. 風向と各海岸の向きを比較し、その時刻の「面が整いやすい条件」を算出。
 4. 過去の風により面が荒れていた記憶を指数緩和モデルで引き継ぎ、
    1時間ごとに面の状態 Q（0〜1）を更新。
-5. Q を従来の板種別総合スコアに入力し、docs/data/forecast.json を出力。
+5. Q を板種別総合スコアに入力し、docs/data/forecast.json を出力。
+6. point別の「scale」係数で、近隣ポイントの砕波高の系統差を暫定補正。
+   海の子はつるかめより少しサイズが大きいという現地情報を参考に調整。
 
 【重要】面モデルは物理法則そのものではなく、予報用の経験的モデルです。
 海岸近くの風・砕波や潮による地形変化を直接観測していないため、
@@ -385,6 +387,38 @@ def size_suitability(a, board="short"):
     return math.exp(-0.5 * ((height - profile["mu"]) / profile["sigma"]) ** 2)
 
 
+def period_score_points(period, board="short"):
+    """周期の寄与点（0〜10点）を返す。総合点の強弱とは別に上限判定がある。
+
+    【変更の背景：2026-10-31 とっぷさんての現地情報】
+    ムネ前後・西風の条件でも、約7秒の波が一律3点で評価されると、
+    面がそこそこ整っていても▼になりやすかった。
+    7秒前後でも遊べる波があるため、ショートに限って6〜10秒の
+    周期点を**連続的に**変化させる。
+
+    ショート：
+      T < 6 s   : 0点
+      6〜8 s    : 3点 → 7点（直線補間。7秒なら5点）
+      8〜10 s   : 7点 → 10点（直線補間）
+      T >= 10 s : 10点
+
+    ロング：既存の段階点（6秒未満0、6〜8秒3、8〜10秒7、10秒以上10）を維持。
+
+    【重要】周期8秒未満は後段の period_cap=69 を維持するため、
+    この補正で○が頻発することはない。7秒でも、面・風・サイズが
+    悪ければ▼や×になり得る。観測で確定した係数ではない。
+    """
+    if board == "long":
+        return 10.0 if period >= 10 else 7.0 if period >= 8 else 3.0 if period >= 6 else 0.0
+    if period < 6:
+        return 0.0
+    if period < 8:
+        return 3.0 + 2.0 * (period - 6.0)
+    if period < 10:
+        return 7.0 + 1.5 * (period - 8.0)
+    return 10.0
+
+
 def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=None):
     """厳しめに校正したショート/ロング共通の総合点 (0〜100)。
 
@@ -395,7 +429,7 @@ def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=N
     基本計算（風の適性や上限の前）:
       F = 波サイズの適合度 [0,1]（ショートはコシ〜アタマ、ロングは従来通り）
       Q = 面の整い具合 [0,1]（過去の風の履歴を考慮した値）
-      P = 期間別の点数 [0,10]
+      P = 周期に応じた点数 [0,10]（ショートのみ6〜10秒で連続補間）
       S_0 = (70 * Q**2.2 + 20 * F + P) * (0.35 + 0.65*F) * 0.92
 
     【厳格化の根拠と限界】
@@ -406,6 +440,7 @@ def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=N
       実測から推定した値ではないので、○の出現頻度は実際のデータで要検証。
     - 風向係数と風速上限: どんなにQが良くても強いオンショアで高得点にしない。
     - 周期の上限: 6秒未満は最大49点、6〜8秒未満は最大69点。
+      6〜8秒の周期点はショートのみ連続補間し、7秒を一律3点にしない。
       8秒以上でも他の条件が揃わない限り高評価にはならない。
     - 日の出/日没は **この式には入れない**。夜でも良い波は良い点数。
       入水可能かどうかの判定はWeb画面で別に行う。
@@ -422,7 +457,9 @@ def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=N
     a = max(0.0, float(a))
     q = clamp(float(q), 0.0, 1.0)
     fit = size_suitability(a, board)
-    period_points = 10 if per >= 10 else 7 if per >= 8 else 3 if per >= 6 else 0
+    # 2026-10-31: 7秒前後の「遊べるショート波」を低く評価しすぎないよう補正。
+    # ただし周期8秒未満の上限69点は変えない（○を出しやすくしない）。
+    period_points = period_score_points(per, board)
     raw = (70 * q ** 2.2 + 20 * fit + period_points) * (0.35 + 0.65 * fit) * 0.92
     # 無風またはほぼ無風のときは風向欠測を評価に使わず、角度減点しない。
     alignment = offshore_suitability(wind_dir, facing, spd, board)
@@ -495,6 +532,12 @@ def forecast(p):
         xi = {t: i for i, t in enumerate(x["time"])}
     except Exception:
         weather_response, x, xi = None, None, {}
+    # 岸の波高補正係数 scale はポイントごとの調整用。
+    # 例：大貫海の子はつるかめよりややサイズが出やすいというユーザーの
+    # 現地情報を反映し、基準0.75に対して0.79（約5.3%増）とする。
+    # これは単独の実測で確立した係数ではなく、地形・波向の違いが
+    # 入っている屈折計算と重ね掛けされる。必ず海の子が大きいとは限らない。
+    # 今後は同時刻の両地点の波高記録から scale を校正する。
     facing, depth, scale = p["facing"], p.get("depth_m", 4.0), p.get("scale", 1.0)
     up, down = p.get("lag_up_h", LAG_UP), p.get("lag_down_h", LAG_DOWN)
     # MarineとWeatherでは系列の開始時刻や格子間隔が異なることがある。
