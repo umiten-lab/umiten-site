@@ -683,6 +683,20 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .tide-lunar .lunar-note{flex-basis:100%;margin-left:30px}
 }
 
+/* 今日の0時から予報を残す。過去のモデル予報値は実測ではないため控えめに表示。 */
+:root{--past-shade:rgba(120,142,165,.10)}
+[data-theme="sunrise"],[data-theme="daylight"]{--past-shade:rgba(60,85,105,.09)}
+[data-theme="sunset"],[data-theme="night"],[data-theme="midnight"]{--past-shade:rgba(130,148,175,.13)}
+.history-note{position:sticky;left:0;z-index:7;width:max-content;max-width:calc(100vw - 50px);font-size:11px;
+  color:var(--sub);margin:3px 0 9px;padding:5px 9px;background:var(--panel);
+  border-left:3px solid var(--line);border-radius:4px;line-height:1.5}
+.grid .c.past{opacity:.51;filter:saturate(.68)}
+.grid .c.past .past-indicator{font-size:9px;line-height:1.1;font-weight:700;color:var(--sub)}
+.tb tr.past td{color:var(--sub);opacity:.62;filter:saturate(.65)}
+.tb tr.past td:first-child{opacity:1;filter:none;color:var(--sub)}
+.tb tr.past .past-indicator{display:block;font-size:10px;font-weight:700;color:var(--sub);line-height:1.3}
+.tb tr.past td[style]{background:var(--past-shade)!important}
+.tb tr.past td:first-child{background:var(--panel)!important}
 /* ------------------------------------------------------------
  * 海点：波の写真はブランドヘッダーだけに使用する。
  *
@@ -840,90 +854,139 @@ function boardScore(r){
 function expertFlag(a, variant=''){
   return a != null && a >= 1.9 ? '<span class="advanced-flag ' + (variant ? 'advanced-flag--' + variant : '') + '">⚠ 頭オーバー・上級者向け</span>' : '';
 }
-function bestRecommendation(rows, now){
-  const candidates = daytime(rows).filter(r => r.t >= now && isSafeDaylightHour(r) && boardScore(r) != null && boardScore(r) >= 55);
-  return candidates.length ? candidates.reduce((best,r) => boardScore(r) > boardScore(best) ? r : best) : null;
+/*
+ * おすすめ時間帯は「今日の最高点」ではなく「これから入れる時間」を示す。
+ * 1) 総合点55点（△）以上なら候補。○/◎だけを優遇しない。
+ * 2) 日の出15分後から日没15分前までの明るい時間に限定する。
+ * 3) 例えば16:40に日没なら16:00〜17:00を丸ごと排除せず、
+ *    16:25までの残り時間を評価する。少なくとも15分は必要とする。
+ * 4) 連続した△以上の時間を一つの区間にまとめ、最初の区間を紹介。
+ *    その日の最高点を待つ必要はない。点数は毎時の既存総合点を再利用する。
+ */
+const RECOMMEND_MIN_SCORE = 55;
+const RECOMMEND_MIN_MINUTES = 15;
+function jstClock(){
+  return new Date().toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'}).slice(0,16).replace(' ','T');
 }
-// 今日の残り時間についてだけ判断する。明日や日没後の高得点は勧めない。
-// 総合評価の記号と点数は別に常時表示する。
-// 日没後も波そのもののスコアは減点しない。
-// 海況の評価と「入水を勧められるか」は別概念として扱う。
-// 予報時刻(jstNow)は時間単位なので、明暗判定だけは実際のJST時刻(分単位)を使う。
-function daylightStatus(now, p=POINTS[state.pi]){
-  if(!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lon)) return 'unknown';
-  const local = new Date().toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'});
-  // 本日のみ評価。「別の日付の予報」では現在の明暗を流用しない。
-  if(local.slice(0,10) !== now.slice(0,10)) return 'unknown';
-  const minute = Number(local.slice(11,13))*60 + Number(local.slice(14,16));
-  const [rise,set] = sun(now.slice(0,10), +p.lat, +p.lon);
-  if(!Number.isFinite(rise) || !Number.isFinite(set)) return 'unknown';
-  if(minute < rise*60) return 'before-sunrise';
-  if(minute >= set*60) return 'after-sunset';
+function hourValue(t){return hourOf(t)+Number(t.slice(14,16)||0)/60;}
+function clockHHMM(hours){
+  // 表示は5分単位にせず実際の分を表示する。境界が60分になる場合も処理。
+  const minutes=Math.max(0,Math.min(24*60,Math.round(hours*60)));
+  return String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(minutes%60).padStart(2,'0');
+}
+function eligibleSurfHours(rows,now,p=POINTS[state.pi],clock=null){
+  if(!p||!Number.isFinite(+p.lat)||!Number.isFinite(+p.lon))return [];
+  // 実際の閲覧中は分まで正確に判定するが、テストなど別日指定のときは
+  // 引数nowを使う。明日の予報の閲覧時に「今の時刻」を混ぜない。
+  const actual=jstClock();
+  const reference=clock||(actual.slice(0,10)===now.slice(0,10)?actual:now);
+  const dateNow=now.slice(0,10), out=[];
+  for(const r of rows){
+    if(!r||!r.t||r.t.slice(0,10)<dateNow||r.t<now)continue;
+    const date=r.t.slice(0,10), h=hourOf(r.t);
+    const [rise,set]=sun(date,+p.lat,+p.lon);
+    if(!Number.isFinite(rise)||!Number.isFinite(set))continue;
+    let from=Math.max(h,5,rise+0.25);
+    const to=Math.min(h+1,20,set-0.25);
+    if(date===dateNow)from=Math.max(from,hourValue(reference));
+    if((to-from)*60+1e-6<RECOMMEND_MIN_MINUTES)continue;
+    out.push({r,from,to,score:boardScore(r)});
+  }
+  return out;
+}
+function recommendationSessions(rows,now,p=POINTS[state.pi],clock=null){
+  const eligible=eligibleSurfHours(rows,now,p,clock)
+    .filter(x=>x.score!=null&&x.score>=RECOMMEND_MIN_SCORE);
+  const sessions=[];
+  for(const slot of eligible){
+    const previous=sessions[sessions.length-1];
+    if(previous&&previous.date===slot.r.t.slice(0,10)&&slot.from-previous.to<0.025){
+      previous.to=Math.max(previous.to,slot.to);
+      previous.slots.push(slot);
+      if(slot.score>previous.peak.score)previous.peak=slot;
+    }else{
+      sessions.push({date:slot.r.t.slice(0,10),from:slot.from,to:slot.to,
+        slots:[slot],peak:slot});
+    }
+  }
+  return sessions;
+}
+function bestRecommendation(rows,now){
+  // 週間見通しとおすすめ枠は同じ候補を参照する。
+  // 最高点ではなく「最初に△以上となる時刻」を採用する。
+  return recommendationSessions(rows,now)[0]?.slots[0]?.r||null;
+}
+// 波そのものの点数と、明るい時間帯に入れるかどうかは別概念。
+function daylightStatus(now,p=POINTS[state.pi]){
+  if(!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lon))return 'unknown';
+  const local=new Date().toLocaleString('sv-SE',{timeZone:'Asia/Tokyo'});
+  if(local.slice(0,10)!==now.slice(0,10))return 'unknown';
+  const minute=Number(local.slice(11,13))*60+Number(local.slice(14,16));
+  const [rise,set]=sun(now.slice(0,10),+p.lat,+p.lon);
+  if(!Number.isFinite(rise)||!Number.isFinite(set))return 'unknown';
+  if(minute<rise*60)return 'before-sunrise';
+  if(minute>=set*60)return 'after-sunset';
   return 'daylight';
 }
-function adviceFor(current, rows, now){
-  const today = now.slice(0,10);
-  const currentScore = boardScore(current);
-  const light = daylightStatus(now);
-  // 夜は×にするのではなく、波の総合点はそのまま保持する。
-  // 総合欄のコメントだけ、安全上の理由で入水は勧めない表現に変える。
-  if(light === 'after-sunset'){
-    // 日没後も波の点数は変更しない。コメントでは翌朝に備える提案をする。
-    // 翌日の波が良いとは限らないため、翌日のコンディションは断定しない。
-    if(currentScore != null && currentScore >= 85)
+function adviceFor(current,rows,now){
+  const today=now.slice(0,10), currentScore=boardScore(current);
+  const light=daylightStatus(now);
+  if(light==='after-sunset'){
+    if(currentScore!=null&&currentScore>=85)
       return '波は非常に良好ですが、日没後です。明日に備えて休みましょう。';
-    if(currentScore != null && currentScore >= 70)
+    if(currentScore!=null&&currentScore>=70)
       return '波は良好ですが、日没後です。明日に備えて休みましょう。';
-    if(currentScore != null && currentScore >= 55)
+    if(currentScore!=null&&currentScore>=55)
       return '波はまずまずですが、日没後です。明日の予報を確認しましょう。';
-    if(currentScore != null && currentScore >= 40)
+    if(currentScore!=null&&currentScore>=40)
       return '波はやや厳しい状態です。明日の予報を確認しましょう。';
-    if(currentScore != null)
+    if(currentScore!=null)
       return '波は厳しい状態です。明日の予報を確認しましょう。';
     return '日没後です。明日の予報を確認しましょう。';
   }
-  const upcoming = rows.filter(r => r.t.slice(0,10) === today &&
-    r.t >= now && isSafeDaylightHour(r) && boardScore(r) != null);
-  if(!upcoming.length) return light === 'before-sunrise' ?
-    '日の出後の予報を確認しましょう。' :
-    '今日は入水できる明るい時間帯が残っていません。';
-  const best = bestOf(upcoming), bestScore = boardScore(best);
-  if(bestScore < 40) return '日没まで厳しい予報です。今日はおすすめしません。';
-  if(bestScore < 55) return '多少できる可能性はありますが、無理はおすすめしません。';
-  const currentEligible = current && current.t.slice(0,10) === today &&
-    current.t >= now && isSafeDaylightHour(current);
-  const scoreNow = currentEligible ? currentScore : null;
-  const bestHour = hourOf(best.t) + '時ごろ';
-  // 評価した予報レコードの時刻を表示。『現在』は使わない。
-  const currentHour = current && current.t ? current.t.slice(11,16) : '--:--';
-  if(scoreNow != null && scoreNow >= 55 &&
-     (best === current || bestScore < scoreNow + 9)) {
-    return scoreNow >= 85 ? currentHour + 'は特に良いコンディションです。' :
-      scoreNow >= 70 ? currentHour + 'が狙い目です。' :
-      currentHour + 'はまずまずのコンディションです。';
+  const todayRows=rows.filter(r=>r.t.slice(0,10)===today);
+  const remaining=eligibleSurfHours(todayRows,now);
+  const sessions=recommendationSessions(todayRows,now);
+  if(!sessions.length){
+    if(!remaining.length)return light==='before-sunrise' ?
+      '日の出後の予報を確認しましょう。' :
+      '日没までに入水できる明るい時間が残っていません。';
+    const scores=remaining.map(x=>x.score).filter(s=>s!=null);
+    if(!scores.length)return '予報データを確認してください。';
+    if(Math.max(...scores)<40)return '日没まで厳しい予報です。今日はおすすめしません。';
+    return '多少できる可能性はありますが、無理はおすすめしません。';
   }
-  if(!currentEligible || best.t > current.t){
-    return bestHour + 'が狙い目です。';
+  const first=sessions[0], firstSlot=first.slots[0];
+  const active=current&&first.slots.some(x=>x.r.t===current.t);
+  if(active){
+    const stamp=current.t.slice(11,16);
+    const label=currentScore>=85?'非常に良い':currentScore>=70?'良い':'まずまずの';
+    const continues=first.slots.length>=2;
+    return stamp+'の予報は'+label+'コンディションです。'+
+      (continues?'この後も△以上が続く見込みです。':'');
   }
-  return bestScore >= 70 ? currentHour + 'が狙い目です。' :
-    currentHour + 'はまずまずのコンディションです。';
+  return clockHHMM(first.from)+'ごろから△以上の予報です。';
 }
-function recommendView(rows, now){
-  const best = bestRecommendation(rows, now);
-  if(!best){
-    const ref = dailyRatingRow(rows);
-    const possible = rows.some(r => r.t >= now && isSafeDaylightHour(r));
-    const note = possible ? '今後の明るい時間帯に55点以上の予報がありません' : '今後、入水に適した明るい時間帯がありません';
-    const label = ref && !isSafeDaylightHour(ref) ? '当日の参考評価（夜間など）' : '当日の日中最高評価';
-    return '<div class="recommendation"><span class="tag">おすすめの時間帯</span><b>該当なし</b>' +
-      '<span>' + note + '</span><span class="rec-reference">' +
-      (ref ? label + ' ' + scoreBadge(boardScore(ref),'day') : '総合評価 ' + scoreBadge(null,'day')) +
+function recommendView(rows,now){
+  const sessions=recommendationSessions(rows,now);
+  if(!sessions.length){
+    const ref=dailyRatingRow(rows);
+    const possible=eligibleSurfHours(rows,now).length>0;
+    const note=possible ? 'この後、明るい時間帯に△以上の予報がありません' :
+      '入水できる明るい時間帯が残っていません';
+    const label=ref&&!isSafeDaylightHour(ref)?'当日の参考評価（夜間など）':'当日の日中最高評価';
+    return '<div class="recommendation"><span class="tag">おすすめの時間帯</span><b>該当なし</b>'+
+      '<span>'+note+'</span><span class="rec-reference">'+
+      (ref?label+' '+scoreBadge(boardScore(ref),'day'):'総合評価 '+scoreBadge(null,'day'))+
       '</span></div>';
   }
-  const s = boardScore(best), date = dayLabel(best.t.slice(0,10));
-  return '<div class="recommendation"><span class="tag">おすすめの時間帯（総合点と連動）</span><b>' + date + ' ' + hourOf(best.t) + ':00〜' + (hourOf(best.t)+1) + ':00</b>' + scoreBadge(s,'day') + '</div>';
+  const first=sessions[0],peak=first.peak;
+  const range=dayLabel(first.date)+' '+clockHHMM(first.from)+'〜'+clockHHMM(first.to);
+  return '<div class="recommendation"><span class="tag">おすすめの時間帯（△以上）</span><b>'+range+'</b>'+
+    '<span class="tag">区間最高 '+scoreBadge(peak.score,'day')+'</span>'+
+    (first.slots.length>=2?'<span>△以上が続く予報です</span>':'')+'</div>';
 }
-function bestOf(rows){ return rows.reduce((b,r) => (boardScore(r) != null && (b == null || boardScore(r) > boardScore(b))) ? r : b, null); }
+function bestOf(rows){return rows.reduce((b,r)=>(boardScore(r)!=null&&(b==null||boardScore(r)>boardScore(b)))?r:b,null);}
 // おすすめの有無と評価表示は独立。入水を勧めない日でも評価を消さない。
 // 原則として日中（安全に明るい時間）の最高評価を表示し、夜だけしか
 // 値がない場合も「参考」と明示したうえで評価を残す。
@@ -1028,8 +1091,8 @@ function chart(rows, now){
 }
 function arrow(deg){ return deg == null ? '--' : '<i style="transform:rotate(' + ((deg+180)%360) + 'deg)">↑</i>'; }
 function cells(rows){
-  const row = (label, fn) => '<div class="cl">' + label + '</div>' + rows.map(r => { const f = fn(r); return '<div class="c' + (isNight(r) ? ' night' : '') + '"' + f[0] + '>' + f[1] + '</div>'; }).join('');
-  return '<div class="grid">' + row('時刻', r => ['', hourOf(r.t)]) + row('風', r => [' style="background:' + windBg(r.kind) + '" title="' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '"', arrow(r.dir) + fmt(r.spd,0)]) +
+  const row = (label, fn) => '<div class="cl">' + label + '</div>' + rows.map(r => { const f = fn(r); return '<div class="c' + (isNight(r) ? ' night' : '') + (r.t < NOWT ? ' past' : '') + '"' + f[0] + '>' + f[1] + '</div>'; }).join('');
+  return '<div class="grid">' + row('時刻', r => ['', hourOf(r.t) + (r.t < NOWT ? '<span class="past-indicator">過去</span>' : '')]) + row('風', r => [' style="background:' + windBg(r.kind) + '" title="' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '"', arrow(r.dir) + fmt(r.spd,0)]) +
     row('面', r => [' style="background:' + faceHeat(r.q) + '" title="面の整い度 ' + (r.q==null?'不明':Math.round(100*r.q)+'%') + '" aria-label="面の整い度 ' + (r.q==null?'不明':Math.round(100*r.q)+'%') + '"', '']) +
     row('周期', r => ['', fmt(r.per,0) + '秒']) + row('波向', r => [' title="' + dir16(r.wdir) + '"', arrow(r.wdir)]) +
     row('総合評価', r => ['', scoreBadge(boardScore(r), 'hour')]) + '</div>';
@@ -1056,6 +1119,12 @@ function tideChart(rows, now){
     s += '<circle cx="' + X(i) + '" cy="' + y(v[i]) + '" r="4" fill="#F2B544"/><text x="' + X(i) + '" y="' + (hi ? y(v[i]) - 9 : y(v[i]) + 19) + '" text-anchor="middle" font-size="12" fill="#E9F1FA">' + (hi ? '満潮 ' : '干潮 ') + hourOf(r.t) + '時 ' + (v[i] >= 0 ? '+' : '') + Math.round(v[i]*100) + 'cm</text>'; } });
   for(let h = 0; h < 24; h += 3) s += '<text x="' + (L+h*cw) + '" y="' + (top+H+18) + '" font-size="12" fill="#A9BBD1" text-anchor="middle">' + h + '時</text>';
   // 波高と同じ「いま」ラベル・色で現在時刻の境界を示す。
+  // 本日の0時以降のモデル予報を残す。過ぎた部分は淡い帯で識別。
+  // データが今日以外のときは「過去」扱いにしない。
+  if (rows[0].t.slice(0,10) === now.slice(0,10)) {
+    const pastCount = rows.filter(r => r.t < now).length;
+    if (pastCount > 0) s += '<rect x="'+L+'" y="'+top+'" width="'+(pastCount*cw)+'" height="'+H+'" fill="var(--past-shade)" pointer-events="none"/>';
+  }
   s += currentTimeMarker(rows,L,cw,top,top+H,W);
   return s + '</svg><p class="note">潮位は平均海面からの高さ(モデル値)。灰色の時間帯は日没後です(日の出 ' + hm(SUN[0]) + '、日の入り ' + hm(SUN[1]) + ')。</p>';
 }
@@ -1064,7 +1133,7 @@ const WX = c => c == null ? '' : c === 0 ? '☀️' : c <= 2 ? '🌤' : c === 3 
 function table(rows){
   const w = (m, heat) => !m || m[0] == null ? '<td>--</td>' : '<td' + (heat ? ' style="background:' + ramp(m[0]).replace('rgb','rgba').replace(')',',.35)') + '"' : '') + '>' + fmt(m[0],1) + 'm / ' + fmt(m[1],0) + 's <small>' + dir16(m[2]) + '</small></td>';
   return '<div class="tbw"><table class="tb"><tr><th>時刻</th><th>総合評価</th><th>天気</th><th>気温</th><th>潮位</th><th>海水温</th><th>風</th><th>波高</th><th>風波</th><th>うねり</th><th>うねり2</th></tr>' +
-    rows.filter(r => hourOf(r.t) % 2 === 0 && r.t >= NOWT).map(r => '<tr' + (isNight(r) ? ' class="nt"' : '') + '><td>' + hourOf(r.t) + '</td><td>' + scoreBadge(boardScore(r), 'table') + expertFlag(r.a, 'table') + '</td><td>' + WX(r.wx) + '</td><td>' + (r.tmp == null ? '--' : Math.round(r.tmp) + '℃') + '</td><td>' + (r.tide == null ? '--' : Math.round(r.tide*100) + 'cm') + '</td><td>' + fmt(r.sst,1) + '℃</td>' +
+    rows.filter(r => hourOf(r.t) % 2 === 0).map(r => '<tr class="' + (isNight(r) ? 'nt ' : '') + (r.t < NOWT ? 'past' : '') + '"><td>' + hourOf(r.t) + (r.t < NOWT ? '<small class="past-indicator">過去</small>' : '') + '</td><td>' + scoreBadge(boardScore(r), 'table') + expertFlag(r.a, 'table') + '</td><td>' + WX(r.wx) + '</td><td>' + (r.tmp == null ? '--' : Math.round(r.tmp) + '℃') + '</td><td>' + (r.tide == null ? '--' : Math.round(r.tide*100) + 'cm') + '</td><td>' + fmt(r.sst,1) + '℃</td>' +
       '<td style="background:' + windBg(r.kind) + '">' + fmt(r.spd,1) + 'm/s <small>' + dir16(r.dir) + ' ' + (r.kind ? KIND[r.kind] : '') + '</small></td>' + w(r.wv, true) + w(r.ww) + w(r.sw) + w(r.sw2) + '</tr>').join('') + '</table></div>';
 }
 function spark(dt, mx, sel){
@@ -1274,8 +1343,8 @@ function view(p, rows){
     '<dl class="stats"><div><dt>' + statIcon('shore') + '岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>' + statIcon('offshore') + '沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>' + statIcon('period') + '周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
-    '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
+    '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="history-note">今日の過ぎた時刻は薄く表示（モデル予報値・実測ではありません）</p><p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
+    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + '<p class="history-note">今日の過ぎた時刻は淡い帯で表示（モデル予報値）</p>' + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + '<p class="history-note">今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。</p>' + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
@@ -1312,6 +1381,10 @@ const POINT_NAMES_EN={
 };
 const LANG_TEXT_EN = {
  // 固有名称・タイトル・操作
+ '今日の過ぎた時刻は薄く表示（モデル予報値・実測ではありません）':'Earlier hours today are faded (model forecast, not observations)',
+ '今日の過ぎた時刻は淡い帯で表示（モデル予報値）':'Earlier hours today are shaded (model forecast)',
+ '今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。':'The full day is shown; earlier forecast hours are faded.',
+ '過去':'Past',
  '波・風の時系列':'Wave & wind timeline','潮位の時系列':'Tide timeline',
  '時間別の詳細（2時間ごと）':'Hourly details (every 2 hours)',
  '波・風・潮位の予報':'Wave, wind & tide forecast','の総合予報スコア':' surf score',
@@ -1342,6 +1415,10 @@ const LANG_TEXT_EN = {
  '◎ 最高':'◎ Excellent','○ 良好':'○ Good','△ まずまず':'△ Fair',
  '▼ 今ひとつ':'▼ Below average','× 厳しい':'× Poor',
  'おすすめの時間帯（総合点と連動）':'Best surf time (based on score)',
+ 'おすすめの時間帯（△以上）':'Surfable time (fair or better)',
+ '区間最高':'Peak in window', '△以上が続く予報です':'Fair or better conditions continue',
+ 'この後、明るい時間帯に△以上の予報がありません':'No fair-or-better daylight conditions remain',
+ '入水できる明るい時間帯が残っていません':'No daylight surfing time remains',
  'おすすめの時間帯':'Best surf time','おすすめ枠なし':'No recommended slot',
  'おすすめ':'Recommended','該当なし':'No suitable time',
  '今後の明るい時間帯に55点以上の予報がありません':'No daylight hours ahead reach 55 points',
@@ -1432,6 +1509,8 @@ const ADVICE_EN={
  '今日は入水できる明るい時間帯が残っていません。':'There are no daylight surf hours left today.',
  '日没まで厳しい予報です。今日はおすすめしません。':'Poor conditions are forecast through sunset. Surfing is not recommended today.',
  '多少できる可能性はありますが、無理はおすすめしません。':'Some surfing may be possible, but conditions are marginal.',
+ '日没までに入水できる明るい時間が残っていません。':'There is not enough daylight left for a surf session.',
+ '予報データを確認してください。':'Please check the forecast data.',
 };
 const LANG_TEXT_PAIRS=Object.entries({...LANG_TEXT_EN,...ADVICE_EN,...POINT_NAMES_EN}).sort((a,b)=>b[0].length-a[0].length);
 const LANG_DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1445,6 +1524,11 @@ function translateDisplayText(value){
   text=text.replace(/(\d{1,2})\/(\d{1,2})\(([日月火水木金土])\)/g,(_,m,d,w)=>
     `${m}/${d} (${({日:'Sun',月:'Mon',火:'Tue',水:'Wed',木:'Thu',金:'Fri',土:'Sat'})[w]})`);
   text=text.replace(/(\d{2}:\d{2})〜日没の予報を使用/g,(_,t)=>`Forecast from ${t} to sunset`);
+  text=text.replace(/(\d{2}:\d{2})の予報は(非常に良い|良い|まずまずの)コンディションです。/g,
+    (_,t,quality)=>`${t} conditions are ${quality==='非常に良い'?'excellent':quality==='良い'?'good':'fair'}. `);
+  text=text.replace(/この後も△以上が続く見込みです。/g,'Fair-or-better conditions are expected to continue.');
+  text=text.replace(/(\d{2}:\d{2})ごろから△以上の予報です。/g,
+    (_,t)=>`Fair-or-better conditions are expected from around ${t}.`);
   text=text.replace(/(\d{1,2})時ごろが狙い目です。/g,
     (_,h)=>`${h}:00 looks promising.`);
   text=text.replace(/(\d{2}:\d{2})は特に良いコンディションです。/g,

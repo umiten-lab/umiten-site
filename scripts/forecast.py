@@ -277,66 +277,75 @@ def wind_score_cap(kind, spd):
     return max(floor, round(base - loss * max(0.0, spd - start)))
 
 
-# 日本式の波サイズ表記に合わせた「板種ごとのサイズ適性」。
-# 各サイズ名と岸の波高の対応はサイト独自の暫定値であり、現地の波の実測ではない。
-#
-# 【ショート】コシ(0.70m)〜アタマ(1.90m未満)を良い波の範囲に広げる。
-#   ・ハラ〜カタ(0.90〜1.50m)は特に高く評価する。
-#   ・コシの下限は「まずまず」から始まり、波が大きくなると徐々に高評価。
-#   ・アタマ付近も良好だが、1.90m以上は上級者向けとして別途抑制する。
-#   ・点を結ぶときはsmoothstep補間を使い、境界でギザギザにならないようにする。
-# 【ロング】従来のハラ〜ムネ中心のガウス型を維持する。
+# 波高は「良い／悪いを単独決定する閾値」ではなく、板種に対する適性の一要素。
+# 2026-11-02: 小さい波は一律×というハードキャップを撤廃する。
+# 波高の補正を段階的に効かせ、実際の点数は面Q（過去の風履歴込み）、
+# 風向・風速、周期と合算して決める。特にロングはヒザ〜モモでも
+# 面が整い風が穏やかなら、△を十分に狙えるよう適合度を広くする。
+# ※波高値とサイズ名称の対応は目安。砕波形状・地形によって異なる。
+# ※係数は経験則の仮設定で、ポイントの実測による統計校正は未実施。
+SHORT_WAIST_FIT_BOOST = 0.06
 SHORT_SIZE_FIT_POINTS = (
     (0.00, 0.00), (0.30, 0.10), (0.50, 0.28),
     (0.70, 0.73), (0.90, 0.96), (1.10, 1.00),
     (1.50, 1.00), (1.70, 0.97), (1.90, 0.87),
     (2.15, 0.56), (2.50, 0.18), (3.00, 0.03),
 )
+# ロングの下限を広げる：ヒザ付近0.4 mでも適性0.49、
+# モモ付近0.5 mなら0.66。波が小さくても「面が整い、周期がある」
+# ケースでは、もとのガウス型より不当に低評価にならない。
+LONG_SIZE_FIT_POINTS = (
+    (0.00, 0.00), (0.20, 0.12), (0.30, 0.30),
+    (0.40, 0.49), (0.50, 0.66), (0.65, 0.82),
+    (0.85, 0.96), (1.08, 1.00), (1.30, 0.88),
+    (1.50, 0.62), (1.70, 0.30), (2.00, 0.10),
+    (2.40, 0.02), (3.00, 0.00),
+)
 BOARD_PROFILES = {
-    "short": {"range_m": (0.70, 1.90), "fit_points": SHORT_SIZE_FIT_POINTS},
-    "long":  {"mu": 1.08, "sigma": 0.38},
+    'short': {'fit_points': SHORT_SIZE_FIT_POINTS, 'size_weight': 0.45},
+    'long':  {'fit_points': LONG_SIZE_FIT_POINTS,  'size_weight': 0.30},
 }
 
 
 def smoothstep(x):
-    """0〜1の範囲で、端点の傾きが0になる補間係数。"""
+    """0〜1のなめらかな補間。区切りの境界で採点が飛ばないようにする。"""
     u = clamp(x, 0.0, 1.0)
     return u * u * (3.0 - 2.0 * u)
 
 
-def short_size_cap(height):
-    """ショートのサイズ上限。風・周期・面が良くてもサイズだけで過大評価しない。
+def wave_presence_factor(height):
+    """ほとんど波がないときだけ減点する、連続的な「波の存在」補正。
 
-    スネ〜モモは従来どおり最大39点で、おすすめ候補にはしない。
-    コシの下限0.70mで最大55点（△）とし、0.90mまで滑らかに100点へ。
-    1.90m以上（アタマオーバー）は技量・危険性の注意喚起に合わせ上限を下げる。
-
-    ※0.70mは「モモ→コシ」の区分が変わるため、ここだけ上限が39→55へ移る。
-      等級境界を越える瞬間の小さな段差は意図的。現地の確実な閾値ではない。
+    波高がちょうど0 mでも面や風だけで△になることを避けたい一方、
+    スネ→ヒザなどの区分ごとに点数を切ってしまうのも不自然。
+    0.12〜0.38 mの範囲だけをsmoothstepで0〜1に移行させる。
+    0.38 m以上なら1.0であり、ヒザ〜モモのロングを妨げない。
     """
-    if height < 0.35:
-        return 25
-    if height < 0.50:
-        return 35
-    if height < 0.70:
-        return 39
-    if height < 0.90:
-        return 55 + 45 * smoothstep((height - 0.70) / 0.20)
-    if height < 1.90:
-        return 100
-    # 1.90mで84点を上限にし、2.50m以上では49点まで抑制。
-    return 84 - 35 * smoothstep((height - 1.90) / 0.60)
+    return smoothstep((max(0.0, height) - 0.12) / 0.26)
 
 
-def size_score_cap(height, board):
-    """点数上限。ロングの従来のサイズ閾値は変更しない。"""
-    if board == "short":
-        return short_size_cap(height)
-    return (25 if height < 0.35 else
-            35 if height < 0.50 else
-            39 if height < 0.70 else
-            69 if height < 0.90 else
-            83 if height < 1.00 else 100)
+def size_suitability(a, board='short'):
+    """サイズ適合度 F: ショート／ロングの別に滑らかな曲線で評価する。
+
+    このFは「何点以下」という上限ではない。最終点は風・風履歴・
+    面・周期の同時条件で決まる。ロングはヒザ〜モモも遊べる適性として扱う。
+    """
+    if a is None:
+        return None
+    height = max(0.0, float(a))
+    pts = BOARD_PROFILES[board]['fit_points']
+    if height <= pts[0][0]:
+        return pts[0][1]
+    for (h0, y0), (h1, y1) in zip(pts, pts[1:]):
+        if height <= h1:
+            weight = smoothstep((height - h0) / (h1 - h0))
+            fit = y0 + (y1 - y0) * weight
+            if board == 'short' and 0.70 < height < 0.90:
+                # 従来のコシ補正は維持する。両端で補正量ゼロになる。
+                x = (height - 0.70) / 0.20
+                fit += SHORT_WAIST_FIT_BOOST * math.sin(math.pi * x) ** 2
+            return clamp(fit, 0.0, 1.0)
+    return pts[-1][1]
 
 
 # 風向の正規分布型評価（角度はオフショア中心からのずれ）。
@@ -362,29 +371,6 @@ def offshore_suitability(frm, facing, spd, board="short"):
     floor = 0.18 if board == "long" else 0.20
     strength = max(0.0, min(1.0, (spd - 1.0) / 2.0))
     return 1.0 - strength * (1.0 - (floor + (1.0 - floor) * gaussian))
-
-
-def size_suitability(a, board="short"):
-    """サイズ適合度(0〜1)。ショートは広い台形型、ロングは従来のガウス型。
-
-    ここでの「適合度」は確率ではなく、予報スコア用の経験的な係数。
-    ショートはコシ〜アタマを高めに評価するため、複数の制御点で形を決める。
-    各点間は滑らかに補間し、例えばムネからカタへの移行で点数が急変しない。
-    """
-    if a is None:
-        return None
-    height = max(0.0, float(a))
-    if board == "short":
-        pts = SHORT_SIZE_FIT_POINTS
-        if height <= pts[0][0]:
-            return pts[0][1]
-        for (h0, y0), (h1, y1) in zip(pts, pts[1:]):
-            if height <= h1:
-                weight = smoothstep((height - h0) / (h1 - h0))
-                return y0 + (y1 - y0) * weight
-        return pts[-1][1]
-    profile = BOARD_PROFILES[board]
-    return math.exp(-0.5 * ((height - profile["mu"]) / profile["sigma"]) ** 2)
 
 
 def period_score_points(period, board="short"):
@@ -420,34 +406,22 @@ def period_score_points(period, board="short"):
 
 
 def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=None):
-    """厳しめに校正したショート/ロング共通の総合点 (0〜100)。
+    """総合点0〜100。サイズだけで等級を決めず、風履歴・面・周期を中心に評価。
 
-    目安: ◎=85+, ○=70+, △=55+, ▼=40+, ×=0〜39。
-    この閾値は変更せず、「実際に条件がかなり揃った時だけ○になる」ように
-    **基礎点側**を調整する。一定割合の日だけ○を出すような順位操作はしない。
+    S0 = (70 * Q**2.2 + 20 * F + P) * (1 - w*(1-F)) * 0.92
+      Q : 面の整い具合。オンショア履歴、回復時定数、ガスト、風波を反映。
+      F : 板種別の波高適合度。サイズの単独閾値やハードキャップは使用しない。
+      P : 周期の加点0〜10。
+      w : サイズ重み。ショート0.45、ロング0.30。
+    S = S0 * offshore_suitability * wave_presence_factor を計算し、
+    風向・風速および周期の上限で制限する。
 
-    基本計算（風の適性や上限の前）:
-      F = 波サイズの適合度 [0,1]（ショートはコシ〜アタマ、ロングは従来通り）
-      Q = 面の整い具合 [0,1]（過去の風の履歴を考慮した値）
-      P = 周期に応じた点数 [0,10]（ショートのみ6〜10秒で連続補間）
-      S_0 = (70 * Q**2.2 + 20 * F + P) * (0.35 + 0.65*F) * 0.92
-
-    【厳格化の根拠と限界】
-    - Q**2.2: 面が中途半端に整っている状態では点を出しにくくする。
-      例: Q=0.75なら0.75**2.2≒0.53となり、面の配点は約37点。
-      Q=0.96でも約0.91なので、◎にはサイズ・周期・風向も必要。
-    - 0.92: 全体の過大評価を減らす経験的な減衰係数。
-      実測から推定した値ではないので、○の出現頻度は実際のデータで要検証。
-    - 風向係数と風速上限: どんなにQが良くても強いオンショアで高得点にしない。
-    - 周期の上限: 6秒未満は最大49点、6〜8秒未満は最大69点。
-      6〜8秒の周期点はショートのみ連続補間し、7秒を一律3点にしない。
-      8秒以上でも他の条件が揃わない限り高評価にはならない。
-    - 日の出/日没は **この式には入れない**。夜でも良い波は良い点数。
-      入水可能かどうかの判定はWeb画面で別に行う。
-
-    なお、得点は経験則に基づく予報の目安で、海上安全の保証ではない。
+    サイズ重みは旧式0.65より小さくし、サイズ由来の二重三重減点を解消。
+    ロングはヒザ〜モモでも、十分なQと好風向・周期なら△になり得る。
+    一方、実質波がないときは wave_presence_factor で連続的に減点する。
+    ◎・○の境界85/70などは従来通り。頻度の統計校正は未実施。
     """
-    # 欠測を×（0点）に変換しない。0m/sの無風だけは風向不明でも許容。
+    # 欠測と「実際に0だった値」を分離する。
     if any(v is None for v in (a, per, q, spd)):
         return None
     if not all(math.isfinite(float(v)) for v in (a, per, q, spd)) or per <= 0:
@@ -457,20 +431,24 @@ def score(a, per, q, kind=None, spd=None, board="short", wind_dir=None, facing=N
     a = max(0.0, float(a))
     q = clamp(float(q), 0.0, 1.0)
     fit = size_suitability(a, board)
-    # 2026-10-31: 7秒前後の「遊べるショート波」を低く評価しすぎないよう補正。
-    # ただし周期8秒未満の上限69点は変えない（○を出しやすくしない）。
     period_points = period_score_points(per, board)
-    raw = (70 * q ** 2.2 + 20 * fit + period_points) * (0.35 + 0.65 * fit) * 0.92
-    # 無風またはほぼ無風のときは風向欠測を評価に使わず、角度減点しない。
+
+    # 新式：サイズは滑らかな適性に過ぎない。サイズのハードキャップはかけない。
+    size_weight = BOARD_PROFILES[board]['size_weight']
+    raw = (70 * q ** 2.2 + 20 * fit + period_points)
+    raw *= (1.0 - size_weight * (1.0 - fit)) * 0.92
+    raw *= wave_presence_factor(a)
+
+    # 風の向きは直前までの「面の荒れ」とは独立に、現在の吹き方も評価する。
     alignment = offshore_suitability(wind_dir, facing, spd, board)
     if alignment is not None:
         raw *= alignment
-    size_cap = size_score_cap(a, board)
+    # 周期の上限は維持。6〜8秒でも遊べるが○を濫発させない。
     period_cap = 49 if per < 6 else 69 if per < 8 else 100
     wind_cap = wind_score_cap(kind, spd)
     if wind_cap is None:
         return None
-    return max(0, min(100, round(min(raw, size_cap, period_cap, wind_cap))))
+    return max(0, min(100, round(min(raw, period_cap, wind_cap))))
 
 
 def source_grid(payload):
@@ -526,8 +504,10 @@ def forecast(p):
     else:
         raise RuntimeError(f"風の予報取得に失敗: {last_error}")
     wi = {t: i for i, t in enumerate(w["time"])}
+    # 天気・気温も今日の0時から表示する。past_days=1で時刻の欠落を防ぐ。
+    # これはモデルの過去時刻の予報値であり、観測記録ではない。
     try:   # 天気と気温(表示用。取れなくても続行)
-        weather_response = get(f"https://api.open-meteo.com/v1/forecast?{q}&hourly=temperature_2m,weather_code")
+        weather_response = get(f"https://api.open-meteo.com/v1/forecast?{q}&hourly=temperature_2m,weather_code&past_days=1")
         x = weather_response["hourly"]
         xi = {t: i for i, t in enumerate(x["time"])}
     except Exception:
