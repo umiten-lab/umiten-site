@@ -639,12 +639,8 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 }
 .date-navigation button:not(:disabled):hover{border-color:var(--sun);color:var(--sun)}
 .date-navigation button:disabled{opacity:.35;cursor:default}
-/* MOREは説明用の小見出し。前後の日付ボタンは左右同じデザイン。 */
+/* 潮汐と気象詳細のナビゲーションも日付だけを表示。 */
 .date-navigation--footer{margin:15px 0 27px;padding:11px 12px}
-.date-navigation .date-navigation-more{
-  grid-column:1/-1;text-align:center;margin:0 0 1px;
-  font-size:10px;letter-spacing:.07em;font-weight:700;color:var(--sub);
-}
 .date-swipe-hint{color:var(--sub);font-size:11px;margin:-5px 0 10px;line-height:1.6}
 /* 月日と波高目盛りは既存の sticky 指定を維持する。 */
 #wave-series-heading,#tide-series-heading,#hourly-detail-heading{scroll-margin-top:86px}
@@ -1331,9 +1327,9 @@ function tideLunarPanel(ymd){
  * 日付送りは3箇所で完全共通。
  * - 左右はどちらも「移動先の日付」を表示する。片側だけ「前日」、もう片側だけ「MORE 11/3」のようにしない。
  * - 中央は現在選択中の日付と「何日目/予報日数」を表示する。
- * - MOREは下部ナビの小見出しだけに置き、左右のボタンの文言・強調は対称にする。
+ * - 日付以外の余計な「MORE」見出しは表示しない。左右の日付を対称に並べる。
  * - 最初/最後の日は移動ボタンを無効化する。選択中の日付を移動先として誤表示しない。
- * - anchor は切り替え後に戻る見出し。潮汐MOREは潮汐へ、詳細MOREは波・風へ戻る。
+ * - anchor は切り替え後に戻る見出し。潮汐の日付切り替えは潮汐へ、詳細は波・風へ戻る。
  */
 function navigationDayLabel(ymd){
   if(state.lang !== 'en') return dayLabel(ymd);
@@ -1341,7 +1337,7 @@ function navigationDayLabel(ymd){
   const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(Date.UTC(year,month-1,day)).getUTCDay()];
   return month + '/' + day + '(' + weekday + ')';
 }
-function dayNavigation(ds, di, bottom=false, anchor='wave-series-heading', tidalMore=false){
+function dayNavigation(ds, di, bottom=false, anchor='wave-series-heading'){
   const prev=di>0, next=di<ds.length-1;
   const date=navigationDayLabel(ds[di].date);
   const title='<span class="date-current"><strong>'+date+'</strong><small>'+(di+1)+' / '+ds.length+(state.lang==='en' ? ' days' : ' 日')+'</small></span>';
@@ -1351,8 +1347,7 @@ function dayNavigation(ds, di, bottom=false, anchor='wave-series-heading', tidal
   const nextAria=state.lang==='en' ? 'View '+(next?'next day '+nextDate:'no later forecast') : (next?'次の日 '+nextDate+'を見る':'次の日の予報はありません');
   const back='<button type="button" data-day-shift="-1" data-day-anchor="'+anchor+'"'+(prev?'':' disabled')+' aria-label="'+backAria+'">← '+prevDate+'</button>';
   const advance='<button type="button" data-day-shift="1" data-day-anchor="'+anchor+'"'+(next?'':' disabled')+' aria-label="'+nextAria+'">'+nextDate+' →</button>';
-  const more=bottom ? '<div class="date-navigation-more">'+(state.lang==='en' ? (tidalMore?'MORE · Other tide dates':'MORE · Other forecast dates') : (tidalMore?'MORE · 別の日の潮汐を見る':'MORE · 別の日の予報を見る'))+'</div>' : '';
-  return '<nav class="date-navigation'+(bottom?' date-navigation--footer':'')+'" aria-label="'+(state.lang==='en'?'Change forecast day':'予報日を切り替え')+'">'+more+back+title+advance+'</nav>';
+  return '<nav class="date-navigation'+(bottom?' date-navigation--footer':'')+'" aria-label="'+(state.lang==='en'?'Change forecast day':'予報日を切り替え')+'">'+back+title+advance+'</nav>';
 }
 
 function view(p, rows){
@@ -1373,7 +1368,7 @@ function view(p, rows){
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
     '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="history-note">今日の過ぎた時刻は薄く表示（モデル予報値・実測ではありません）</p><p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + '<p class="history-note">今日の過ぎた時刻は淡い帯で表示（モデル予報値）</p>' + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading',true) + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + '<p class="history-note">今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。</p>' + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
+    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + '<p class="history-note">今日の過ぎた時刻は淡い帯で表示（モデル予報値）</p>' + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading') + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + '<p class="history-note">今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。</p>' + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
