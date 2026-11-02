@@ -623,33 +623,41 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .forecast-lead-title{display:block;font-weight:700;line-height:1.45}
 .forecast-lead-detail{display:block;margin-top:3px;color:var(--sub);font-size:.91em;line-height:1.55}
 /* 2026-10-30: 予報日ナビゲーション。5つの表示テーマに共通する変数で着色。 */
+/* 日付ナビは3箇所とも「左：移動先日付／中央：表示中／右：移動先日付」に統一。 */
 .date-navigation{
-  display:flex; align-items:center; gap:10px; justify-content:space-between;
-  padding:10px 12px; margin:12px 0 13px; border:1px solid var(--line);
-  border-radius:14px; background:var(--panel); min-width:0;
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(84px,1.15fr) minmax(0,1fr);
+  align-items:center;gap:9px;padding:10px 12px;margin:12px 0 13px;
+  border:1px solid var(--line);border-radius:14px;background:var(--panel);min-width:0;
 }
-.date-navigation .date-current{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;flex:1;text-align:center;line-height:1.4}
+.date-navigation .date-current{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;text-align:center;line-height:1.4}
 .date-navigation .date-current strong{color:var(--text);font-size:14px;white-space:nowrap}
 .date-navigation .date-current small{color:var(--sub);font-size:11px}
-.date-navigation button{background:var(--control-bg);border:1px solid var(--line);color:var(--text);font-size:12px;font-weight:700;padding:8px 13px;min-height:38px;white-space:nowrap}
+.date-navigation button{
+  width:100%;min-width:0;min-height:40px;padding:8px 7px;border-radius:12px;
+  background:var(--control-bg);border:1px solid var(--line);
+  color:var(--text);font-size:12px;font-weight:700;white-space:nowrap;
+}
 .date-navigation button:not(:disabled):hover{border-color:var(--sun);color:var(--sun)}
-.date-navigation button:disabled{opacity:.3;cursor:default}
+.date-navigation button:disabled{opacity:.35;cursor:default}
+/* MOREは説明用の小見出し。前後の日付ボタンは左右同じデザイン。 */
 .date-navigation--footer{margin:15px 0 27px;padding:11px 12px}
-.date-navigation--footer .date-current strong{font-size:12px}
-.date-navigation--footer button[data-day-shift="1"]{border-color:var(--sun);color:var(--sun);padding-inline:17px}
+.date-navigation .date-navigation-more{
+  grid-column:1/-1;text-align:center;margin:0 0 1px;
+  font-size:10px;letter-spacing:.07em;font-weight:700;color:var(--sub);
+}
 .date-swipe-hint{color:var(--sub);font-size:11px;margin:-5px 0 10px;line-height:1.6}
 /* 月日と波高目盛りは既存の sticky 指定を維持する。 */
 #wave-series-heading,#tide-series-heading,#hourly-detail-heading{scroll-margin-top:86px}
 @media(max-width:760px){
-  .date-navigation{gap:5px;padding:9px 6px}
+  .date-navigation{gap:5px;padding:9px 6px;grid-template-columns:minmax(0,1fr) minmax(79px,1.08fr) minmax(0,1fr)}
   .date-navigation .date-current strong{font-size:12px}
   .date-navigation .date-current small{font-size:10px}
-  .date-navigation button{font-size:11px;min-height:42px;padding:7px 9px}
-  .date-navigation--footer button[data-day-shift="1"]{padding-inline:10px}
+  .date-navigation button{font-size:11px;min-height:42px;padding:7px 4px}
 }
 @media(max-width:350px){
+  .date-navigation{gap:4px;padding:8px 5px}
   .date-navigation .date-current strong{font-size:11px}
-  .date-navigation button{padding:7px 6px}
+  .date-navigation button{font-size:10px;padding:7px 2px}
 }
 
 
@@ -1320,19 +1328,31 @@ function tideLunarPanel(ymd){
 }
 
 /*
- * 日付送りを波・風、潮汐、気象詳細で共用する。
- * anchor は切り替え後に見せたい見出しのID。潮汐のMOREは潮汐へ戻す。
- * tidalMore は潮汐欄だけの補足文言で、他のMOREの挙動を変えない。
+ * 日付送りは3箇所で完全共通。
+ * - 左右はどちらも「移動先の日付」を表示する。片側だけ「前日」、もう片側だけ「MORE 11/3」のようにしない。
+ * - 中央は現在選択中の日付と「何日目/予報日数」を表示する。
+ * - MOREは下部ナビの小見出しだけに置き、左右のボタンの文言・強調は対称にする。
+ * - 最初/最後の日は移動ボタンを無効化する。選択中の日付を移動先として誤表示しない。
+ * - anchor は切り替え後に戻る見出し。潮汐MOREは潮汐へ、詳細MOREは波・風へ戻る。
  */
+function navigationDayLabel(ymd){
+  if(state.lang !== 'en') return dayLabel(ymd);
+  const [year,month,day] = ymd.split('-').map(Number);
+  const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(Date.UTC(year,month-1,day)).getUTCDay()];
+  return month + '/' + day + '(' + weekday + ')';
+}
 function dayNavigation(ds, di, bottom=false, anchor='wave-series-heading', tidalMore=false){
-  const date=fullDate(ds[di].date), prev=di>0, next=di<ds.length-1;
-  const title='<span class="date-current"><strong>'+date+'</strong><small>'+(di+1)+' / '+ds.length+' 日</small></span>';
-  const back='<button type="button" data-day-shift="-1" data-day-anchor="'+anchor+'"'+(prev?'':' disabled')+' aria-label="前日の予報">← 前日</button>';
-  const nextLabel=bottom && tidalMore ? '翌日の潮汐を見る' : '翌日の予報を見る';
-  const nextText=bottom && tidalMore ? 'MORE · '+dayLabel(ds[di+1]?.date||ds[di].date)+'の潮汐を見る →'
-    : 'MORE · '+dayLabel(ds[di+1]?.date||ds[di].date)+'を見る →';
-  const advance='<button type="button" data-day-shift="1" data-day-anchor="'+anchor+'"'+(next?'':' disabled')+' aria-label="'+(next?nextLabel:'これより先の予報はありません')+'">'+(bottom ? (next ? nextText : 'これより先はありません') : '翌日 →')+'</button>';
-  return '<nav class="date-navigation'+(bottom?' date-navigation--footer':'')+'" aria-label="予報日を切り替え">'+back+title+advance+'</nav>';
+  const prev=di>0, next=di<ds.length-1;
+  const date=navigationDayLabel(ds[di].date);
+  const title='<span class="date-current"><strong>'+date+'</strong><small>'+(di+1)+' / '+ds.length+(state.lang==='en' ? ' days' : ' 日')+'</small></span>';
+  const prevDate=prev?navigationDayLabel(ds[di-1].date):'—';
+  const nextDate=next?navigationDayLabel(ds[di+1].date):'—';
+  const backAria=state.lang==='en' ? 'View '+(prev?'previous day '+prevDate:'no earlier forecast') : (prev?'前の日 '+prevDate+'を見る':'前の日の予報はありません');
+  const nextAria=state.lang==='en' ? 'View '+(next?'next day '+nextDate:'no later forecast') : (next?'次の日 '+nextDate+'を見る':'次の日の予報はありません');
+  const back='<button type="button" data-day-shift="-1" data-day-anchor="'+anchor+'"'+(prev?'':' disabled')+' aria-label="'+backAria+'">← '+prevDate+'</button>';
+  const advance='<button type="button" data-day-shift="1" data-day-anchor="'+anchor+'"'+(next?'':' disabled')+' aria-label="'+nextAria+'">'+nextDate+' →</button>';
+  const more=bottom ? '<div class="date-navigation-more">'+(state.lang==='en' ? (tidalMore?'MORE · Other tide dates':'MORE · Other forecast dates') : (tidalMore?'MORE · 別の日の潮汐を見る':'MORE · 別の日の予報を見る'))+'</div>' : '';
+  return '<nav class="date-navigation'+(bottom?' date-navigation--footer':'')+'" aria-label="'+(state.lang==='en'?'Change forecast day':'予報日を切り替え')+'">'+more+back+title+advance+'</nav>';
 }
 
 function view(p, rows){
