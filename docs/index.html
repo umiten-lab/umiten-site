@@ -817,7 +817,7 @@ function face(r){
   return {off: s<=6?'◎':s<=9?'○':'△', sideoff: s<=5?'◎':s<=8?'○':'△', side: s<=4?'◎':s<=5?'○':s<=8?'△':'✕', sideon: s<=2?'○':s<=4?'△':'✕', on: s<=1.5?'○':s<=3?'△':'✕'}[r.kind];
 }
 function faceBg(f){ return f === '◎' ? 'rgba(59,143,224,.5)' : f === '○' ? 'rgba(59,143,224,.24)' : f === '△' ? 'rgba(242,181,68,.24)' : f === '✕' ? 'rgba(242,181,68,.45)' : 'transparent'; }
-// 面の状態を連続カラーマップで表す。0=荒れ、1=整う。
+// 面の状態を連続カラーマップで表す。0=乱れた面、1=きれいな面。
 // カラーバーと各セルで同じ赤系→琥珀→青緑系の尺度を使う。
 const FACE_COLOR_STOPS=[[180,89,86],[225,185,109],[55,157,175]];
 function faceRGB(q){
@@ -830,7 +830,7 @@ function faceHeat(q){
   const c=faceRGB(q).join(',');
   return 'linear-gradient(180deg, rgba('+c+',.85) 0%, rgba('+c+',.52) 100%)';
 }
-function faceLegend(){return '<div class="face-color-key" aria-label="面の状態の連続色目盛り。左は荒れ、右は整う"><span>荒れ</span><div class="face-color-scale"></div><span>整う</span></div>';}
+function faceLegend(){return '<div class="face-color-key" aria-label="面の状態の連続色目盛り。左は乱れた面、右はきれいな面"><span>乱れた面</span><div class="face-color-scale"></div><span>きれいな面</span></div>';}
 
 function windBg(k){ return k === 'off' || k === 'sideoff' ? 'rgba(59,143,224,.4)' : k === 'on' || k === 'sideon' ? 'rgba(242,181,68,.32)' : 'rgba(169,187,209,.14)'; }
 function kindCls(k){ return k === 'off' || k === 'sideoff' ? 'off' : k === 'on' || k === 'sideon' ? 'on' : ''; }
@@ -1128,7 +1128,8 @@ function tideChart(rows, now){
   s += currentTimeMarker(rows,L,cw,top,top+H,W);
   return s + '</svg><p class="note">潮位は平均海面からの高さ(モデル値)。灰色の時間帯は日没後です(日の出 ' + hm(SUN[0]) + '、日の入り ' + hm(SUN[1]) + ')。</p>';
 }
-const WX = c => c == null ? '' : c === 0 ? '☀️' : c <= 2 ? '🌤' : c === 3 ? '☁' : c <= 48 ? '🌫' : c <= 67 ? '🌧' : c <= 77 ? '❄' : c <= 82 ? '🌦' : '⛈';
+// 天気アイコンはiPhoneでもカラー絵文字になるよう、全種類に絵文字表示指定 (U+FE0F) を付ける。
+const WX = c => c == null ? '' : c === 0 ? '☀️' : c <= 2 ? '🌤️' : c === 3 ? '☁️' : c <= 48 ? '🌫️' : c <= 67 ? '🌧️' : c <= 77 ? '❄️' : c <= 82 ? '🌦️' : '⛈️';
 // Surf life のような、2時間ごとの詳細表
 function table(rows){
   const w = (m, heat) => !m || m[0] == null ? '<td>--</td>' : '<td' + (heat ? ' style="background:' + ramp(m[0]).replace('rgb','rgba').replace(')',',.35)') + '"' : '') + '>' + fmt(m[0],1) + 'm / ' + fmt(m[1],0) + 's <small>' + dir16(m[2]) + '</small></td>';
@@ -1439,9 +1440,9 @@ const LANG_TEXT_EN = {
  '波と風の向き。矢印の長さはすべて同じ':'Wave and wind directions. Arrows are equal length',
  '潮位のグラフ':'Tide chart',
  '面の状態は連続色で表示':'Surface quality shown as a color gradient',
- '面の状態の連続色目盛り。左は荒れ、右は整う':'Surface quality scale from choppy to clean',
+ '面の状態の連続色目盛り。左は乱れた面、右はきれいな面':'Surface quality scale from choppy to clean',
  '面の整い度':'Surface cleanliness', '不明':'Unknown',
- '荒れ':'Choppy','整う':'Clean',
+ '乱れた面':'Choppy surface','きれいな面':'Clean surface',
  '波：岸の波高':'Wave: nearshore height','青線：潮位':'Blue line: tide',
  '下段：風・面・周期・波向・評価':'Below: wind, surface, period, wave direction, score',
  '大潮':'Spring tide','中潮':'Moderate tide','小潮':'Neap tide','長潮':'Low tidal range','若潮':'Building tide',
