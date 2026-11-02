@@ -1319,11 +1319,19 @@ function tideLunarPanel(ymd){
     '<small class="lunar-note">潮回り：旧暦による目安 ／ 月齢：日本時間12時</small></div>';
 }
 
-function dayNavigation(ds, di, bottom=false){
+/*
+ * 日付送りを波・風、潮汐、気象詳細で共用する。
+ * anchor は切り替え後に見せたい見出しのID。潮汐のMOREは潮汐へ戻す。
+ * tidalMore は潮汐欄だけの補足文言で、他のMOREの挙動を変えない。
+ */
+function dayNavigation(ds, di, bottom=false, anchor='wave-series-heading', tidalMore=false){
   const date=fullDate(ds[di].date), prev=di>0, next=di<ds.length-1;
   const title='<span class="date-current"><strong>'+date+'</strong><small>'+(di+1)+' / '+ds.length+' 日</small></span>';
-  const back='<button type="button" data-day-shift="-1" data-day-anchor="wave-series-heading"'+(prev?'':' disabled')+' aria-label="前日の予報">← 前日</button>';
-  const advance='<button type="button" data-day-shift="1" data-day-anchor="wave-series-heading"'+(next?'':' disabled')+' aria-label="'+(next?'翌日の予報を見る':'これより先の予報はありません')+'">'+(bottom ? (next ? 'MORE · '+dayLabel(ds[di+1].date)+'を見る →' : 'これより先はありません') : '翌日 →')+'</button>';
+  const back='<button type="button" data-day-shift="-1" data-day-anchor="'+anchor+'"'+(prev?'':' disabled')+' aria-label="前日の予報">← 前日</button>';
+  const nextLabel=bottom && tidalMore ? '翌日の潮汐を見る' : '翌日の予報を見る';
+  const nextText=bottom && tidalMore ? 'MORE · '+dayLabel(ds[di+1]?.date||ds[di].date)+'の潮汐を見る →'
+    : 'MORE · '+dayLabel(ds[di+1]?.date||ds[di].date)+'を見る →';
+  const advance='<button type="button" data-day-shift="1" data-day-anchor="'+anchor+'"'+(next?'':' disabled')+' aria-label="'+(next?nextLabel:'これより先の予報はありません')+'">'+(bottom ? (next ? nextText : 'これより先はありません') : '翌日 →')+'</button>';
   return '<nav class="date-navigation'+(bottom?' date-navigation--footer':'')+'" aria-label="予報日を切り替え">'+back+title+advance+'</nav>';
 }
 
@@ -1345,7 +1353,7 @@ function view(p, rows){
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass">' + compass(r, p) + '</div></section></div>|SPLIT|' +
     '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="history-note">今日の過ぎた時刻は薄く表示（モデル予報値・実測ではありません）</p><p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + '<p class="history-note">今日の過ぎた時刻は淡い帯で表示（モデル予報値）</p>' + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div><h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + '<p class="history-note">今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。</p>' + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
+    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + '<p class="history-note">今日の過ぎた時刻は淡い帯で表示（モデル予報値）</p>' + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading',true) + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + '<p class="history-note">今日の0時〜23時の予報を表示。過ぎた時刻は薄く表示しています。</p>' + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
@@ -1462,6 +1470,7 @@ const LANG_TEXT_EN = {
  'サイド':'Cross-shore','オンショア':'Onshore',
  // 日付切り替え
  '前日の予報':'Previous forecast day','翌日の予報を見る':'View next forecast day',
+ '翌日の潮汐を見る':'View next day’s tide','の潮汐を見る →':' tide →',
  'これより先の予報はありません':'No more forecast days available',
  '予報日を切り替え':'Change forecast day','前日':'Previous','翌日':'Next',
  'これより先はありません':'End of forecast','を見る →':' →',
@@ -1656,7 +1665,7 @@ function availableDayCount(){
 /*
  * HTMLを再描画すると、ブラウザが見ていた縦スクロール位置が動くことがある。
  * 切り替え前の見出しの画面上の位置を記録し、再描画後に同じ高さへ戻す。
- * MOREボタンから進むときは、翌日の波・風時系列の先頭を表示する。
+ * MOREボタンから進むときは、押した場所に対応する翌日の見出しを表示する。
  */
 function moveDay(delta, section='wave-series-heading', fromMore=false){
   const count=availableDayCount();
@@ -1667,7 +1676,7 @@ function moveDay(delta, section='wave-series-heading', fromMore=false){
   const previousTop=oldHeading?.getBoundingClientRect().top ?? 80;
   state.day=next;
   render();
-  const target=document.getElementById(fromMore?'wave-series-heading':section);
+  const target=document.getElementById(section);
   if(target){
     if(fromMore){
       const y=window.scrollY+target.getBoundingClientRect().top-78;
