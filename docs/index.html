@@ -415,10 +415,10 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   background:var(--compass-card-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   border:1px solid var(--compass-card-border);box-shadow:0 10px 26px rgba(0,0,0,.22);
 }
-.now .compass svg{display:block;width:170px;height:170px;max-width:100%;margin:0 auto}
-.now .compass .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;line-height:1.45;justify-content:center;margin:8px 0 0;color:var(--compass-text)}
+.now .compass svg{display:block;width:204px;height:204px;max-width:100%;margin:0 auto}
+.now .compass .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:13px;line-height:1.45;justify-content:center;margin:8px 0 0;color:var(--compass-text)}
 .now .compass .legend span{display:flex;align-items:center;gap:5px}
-.now .compass .note{font-size:11px;line-height:1.5;margin:8px 0 0;color:var(--compass-sub)}
+.now .compass .note{font-size:12px;line-height:1.5;margin:8px 0 0;color:var(--compass-sub)}
 .compass-tabs{display:flex;gap:4px;justify-content:center;margin:0 0 8px}
 .compass-tabs button{font:inherit;font-size:12px;padding:3px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
 .compass-tabs button[aria-pressed="true"]{background:var(--sun);border-color:var(--sun);color:var(--selected-text)}
@@ -773,8 +773,9 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 /* 地図と円グラフを隣り合わせのグループに */
 .now{grid-template-columns:minmax(0,1fr) auto}
 .compass-group{display:flex;gap:14px;align-items:stretch;justify-self:end}
-.compass-group .spot-map-card{width:340px;max-width:none;margin:0;display:flex;flex-direction:column}
+.compass-group .spot-map-card{width:340px;max-width:none;margin:0;display:flex;flex-direction:column;position:relative}
 .compass-group .spot-map-card .compass-map{flex:1;height:auto;min-height:280px}
+.compass-group .spot-map-card .spot-map-link{position:absolute;right:8px;bottom:8px;z-index:1;margin:0;padding:3px 7px;border-radius:7px;background:var(--control-bg);box-shadow:0 1px 5px rgba(0,0,0,.2);line-height:1.35}
 .compass-group .compass{flex:0 0 236px}
 @media (max-width:1100px){
   .now{grid-template-columns:1fr}
@@ -792,9 +793,9 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .compass-group .compass svg{
     width:100%;height:auto;max-width:150px;margin:0 auto;
   }
-  .compass-group .compass .legend{gap:3px 6px;margin:4px 0 0;font-size:9px}
-  .compass-group .compass .note{margin:4px 0 0;font-size:9px;line-height:1.35}
-  .compass-group .spot-map-card .compass-map{flex:none;height:150px;min-height:0}
+  .compass-group .compass .legend{gap:3px 6px;margin:4px 0 0;font-size:11px}
+  .compass-group .compass .note{margin:4px 0 0;font-size:11px;line-height:1.4}
+  .compass-group .spot-map-card .compass-map{flex:1;height:auto;min-height:0}
 }
 /* Windy の公式埋め込み。選択中ポイントの座標で風レイヤーを表示する。 */
 .windy-section{margin:18px 0 0}
@@ -804,8 +805,8 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   /* 操作しやすさを残しつつ、予報を縦に長くしすぎない。 */
   h2{margin:24px 0 8px}
   .now{gap:12px;padding-top:8px;padding-bottom:20px}
-  .compass-group .compass svg{max-width:132px}
-  .compass-group .spot-map-card .compass-map{height:132px}
+  .compass-group .compass svg{max-width:150px}
+  .compass-group .spot-map-card .compass-map{flex:1;height:auto;min-height:0}
   .date-navigation--footer{margin:10px 0 20px;padding:8px 9px}
   .windy-section{margin-top:14px}
   .windy-section h2{margin:0 0 8px}
@@ -1098,13 +1099,13 @@ function compass(r, p){
     const [sx,sy] = pt(d,82), [ex,ey] = pt(d,41), a = d*Math.PI/180;
     const ux=Math.sin(a), uy=-Math.cos(a), nx=Math.cos(a), ny=Math.sin(a);
     const tx=ex, ty=ey, bx=ex+ux*10, by=ey+uy*10;
-    return '<line x1="'+sx+'" y1="'+sy+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>'+
+    return '<line x1="'+sx+'" y1="'+sy+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="4.2" stroke-linecap="round"/>'+
       '<polygon points="'+tx+','+ty+' '+(bx+nx*5)+','+(by+ny*5)+' '+(bx-nx*5)+','+(by-ny*5)+'" fill="'+col+'"/>';
   };
   let s = '<svg viewBox="0 0 240 240" role="img" aria-label="波と風の向き。矢印の長さはすべて同じ"><circle cx="120" cy="120" r="84" fill="var(--compass-water)" stroke="var(--compass-ring)"/>' +
     '<path d="M'+x1+' '+y1+'A84 84 0 0 1 '+x2+' '+y2+'Z" fill="var(--compass-land)"/>' +
-    '<text x="120" y="14" text-anchor="middle" font-size="12" fill="var(--compass-sub)">北</text>'+
-    '<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="12" fill="var(--compass-text)">陸</text>';
+    '<text x="120" y="16" text-anchor="middle" font-size="16" font-weight="700" fill="var(--compass-sub)">北</text>'+
+    '<text x="'+lx+'" y="'+(ly+5)+'" text-anchor="middle" font-size="16" font-weight="700" fill="var(--compass-text)">陸</text>';
   // 波向は主要なうねりを代表表示。複数成分の太さ・長さに差を付けない。
   const wave = (r.comps||[]).filter(x => x[0]!=null && x[0]>=0.05 && x[2]!=null)
     .sort((a,b)=>(b[3]||0)-(a[3]||0))[0];
@@ -1112,7 +1113,7 @@ function compass(r, p){
     const col=wave[3]/wave[0]>=0.6 ? 'var(--compass-wave)' : 'var(--compass-wave-muted)';
     s+=arr(wave[2],col);
     const [tx,ty]=pt(wave[2],103);
-    s+='<text x="'+tx+'" y="'+(ty+4)+'" text-anchor="middle" font-size="11" fill="'+col+'">波 '+fmt(wave[0],1)+'m</text>';
+    s+='<text x="'+tx+'" y="'+(ty+5)+'" text-anchor="middle" font-size="14" font-weight="700" fill="'+col+'">波 '+fmt(wave[0],1)+'m</text>';
   }
   if(r.dir!=null) s+=arr(r.dir,'var(--compass-wind)');
   return s+'</svg><div class="legend"><span><i style="background:var(--compass-wave)"></i>波向（主要成分）</span><span><i style="background:var(--compass-wind)"></i>風向</span></div>'+
@@ -1838,7 +1839,7 @@ function spotMap(p){
   if(p.lat==null || p.lon==null) return '<p class="note">このポイントの座標がありません。</p>';
   const src = 'https://www.google.com/maps?q=' + p.lat + ',' + p.lon + '&z=15&t=k&hl=' + (state.lang==='en'?'en':'ja') + '&output=embed';
   return '<iframe class="compass-map" title="' + p.name + '" data-src="' + src + '"' + ' src="' + src + '"' + ' loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>' +
-    (p.map_url ? '<p class="note"><a href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">Googleマップで開く ↗</a></p>' : '');
+    (p.map_url ? '<p class="note spot-map-link"><a href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">Googleマップで開く ↗</a></p>' : '');
 }
 function windyWind(p){
   if(p.lat==null || p.lon==null) return '';
