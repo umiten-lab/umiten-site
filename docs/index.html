@@ -177,13 +177,13 @@ img{max-width:100%}
 @media(max-width:760px){.series-heading .date-label{font-size:13px}.series-date{font-size:12px;flex-wrap:wrap;gap:4px 7px}}
 
 /* 海の一日：朝、昼、夕、夜。ナイトは旧ダークテーマと同じ配色。 */
-:root,[data-theme="night"]{color-scheme:dark;--control-bg:rgba(6,18,42,.68);--compass-bg:rgba(6,18,42,.72);--hero-opacity:.24;--selected-text:#06122A}
-[data-theme="daylight"]{color-scheme:light;--bg:#EAF5FC;--panel:#FFFFFF;--line:rgba(28,86,130,.20);--text:#15334F;--sub:#466982;--sun:#126A9E;--sea:#1387C5;--control-bg:rgba(255,255,255,.94);--compass-bg:#F7FCFF;--hero-opacity:.11;--selected-text:#FFFFFF}
+:root,[data-theme="night"]{color-scheme:dark;--control-bg:rgba(6,18,42,.68);--compass-bg:rgba(6,18,42,.72);--compass-card-bg:#0B1D3A;--compass-card-border:rgba(180,214,240,.23);--compass-water:#153B61;--compass-land:#728296;--compass-ring:#6B88A7;--compass-wave:#F2B544;--compass-wave-muted:#A8B8C8;--compass-wind:#F4F8FC;--compass-text:#F4F8FC;--compass-sub:#BED0E2;--hero-opacity:.24;--selected-text:#06122A}
+[data-theme="daylight"]{color-scheme:light;--bg:#EAF5FC;--panel:#FFFFFF;--line:rgba(28,86,130,.20);--text:#15334F;--sub:#466982;--sun:#126A9E;--sea:#1387C5;--control-bg:rgba(255,255,255,.94);--compass-bg:#F7FCFF;--compass-card-bg:#F7FCFF;--compass-card-border:rgba(18,93,142,.23);--compass-water:#CBE7F7;--compass-land:#DDE7EC;--compass-ring:#6FA9C7;--compass-wave:#126A9E;--compass-wave-muted:#557A92;--compass-wind:#15334F;--compass-text:#15334F;--compass-sub:#466982;--hero-opacity:.11;--selected-text:#FFFFFF}
 [data-theme="daylight"] body{background:linear-gradient(180deg,#D7F0FF 0,#EAF5FC 500px,#EAF5FC 100%)}
 [data-theme="daylight"] .hero{background:linear-gradient(120deg,#EAF9FF 0%,#C9EBFC 60%,#AEE0F9 100%)}
-[data-theme="sunset"]{color-scheme:dark;--bg:#211B35;--panel:#352943;--line:rgba(255,215,216,.2);--text:#FFF0EA;--sub:#DCC1CE;--sun:#FDB57A;--sea:#AD8ADC;--control-bg:rgba(34,25,52,.8);--compass-bg:rgba(36,23,51,.84);--hero-opacity:.20;--selected-text:#241D37}
+[data-theme="sunset"]{color-scheme:dark;--bg:#211B35;--panel:#352943;--line:rgba(255,215,216,.2);--text:#FFF0EA;--sub:#DCC1CE;--sun:#FDB57A;--sea:#AD8ADC;--control-bg:rgba(34,25,52,.8);--compass-bg:rgba(36,23,51,.84);--compass-card-bg:#2C2338;--compass-card-border:rgba(255,215,216,.24);--compass-water:#50416D;--compass-land:#806377;--compass-ring:#B991AB;--compass-wave:#FFD094;--compass-wave-muted:#D2A4B6;--compass-wind:#FFF0EA;--compass-text:#FFF0EA;--compass-sub:#DCC1CE;--hero-opacity:.20;--selected-text:#241D37}
 /* SUNRISE: warm peach sky, amber highlights and cool ocean contrast. */
-[data-theme="sunrise"]{color-scheme:light;--bg:#FFF1E5;--panel:#FFFCF7;--line:rgba(133,71,50,.21);--text:#392C33;--sub:#70565B;--sun:#B34E23;--sea:#146B86;--control-bg:rgba(255,250,244,.94);--compass-bg:#FFF9F0;--hero-opacity:.14;--selected-text:#FFFFFF}
+[data-theme="sunrise"]{color-scheme:light;--bg:#FFF1E5;--panel:#FFFCF7;--line:rgba(133,71,50,.21);--text:#392C33;--sub:#70565B;--sun:#B34E23;--sea:#146B86;--control-bg:rgba(255,250,244,.94);--compass-bg:#FFF9F0;--compass-card-bg:#FFF9F1;--compass-card-border:#E5B991;--compass-water:#D2ECF5;--compass-land:#F1C8A7;--compass-ring:#6E8E9E;--compass-wave:#B34E23;--compass-wave-muted:#935F42;--compass-wind:#146B86;--compass-text:#392C33;--compass-sub:#70565B;--hero-opacity:.14;--selected-text:#FFFFFF}
 [data-theme="sunrise"] body{background:linear-gradient(180deg,#FFDFBF 0,#FFF1E5 480px,#FFF1E5 100%)}
 [data-theme="sunrise"] .hero{background:linear-gradient(125deg,#FFEDD6 0%,#FFE0C0 56%,#FFC5A3 100%)}
 [data-theme="sunrise"] .hero>img{opacity:.14;mix-blend-mode:multiply}
@@ -412,13 +412,13 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .now > div:first-child{min-width:0}
 .now .compass{
   width:236px;max-width:100%;justify-self:end;padding:12px;border-radius:16px;
-  background:rgba(8,16,28,.78);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,.14);box-shadow:0 10px 26px rgba(0,0,0,.22);
+  background:var(--compass-card-bg);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--compass-card-border);box-shadow:0 10px 26px rgba(0,0,0,.22);
 }
 .now .compass svg{display:block;width:170px;height:170px;max-width:100%;margin:0 auto}
-.now .compass .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;line-height:1.45;justify-content:center;margin:8px 0 0;color:var(--text)}
+.now .compass .legend{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:11px;line-height:1.45;justify-content:center;margin:8px 0 0;color:var(--compass-text)}
 .now .compass .legend span{display:flex;align-items:center;gap:5px}
-.now .compass .note{font-size:11px;line-height:1.5;margin:8px 0 0;color:var(--sub)}
+.now .compass .note{font-size:11px;line-height:1.5;margin:8px 0 0;color:var(--compass-sub)}
 .compass-tabs{display:flex;gap:4px;justify-content:center;margin:0 0 8px}
 .compass-tabs button{font:inherit;font-size:12px;padding:3px 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer}
 .compass-tabs button[aria-pressed="true"]{background:var(--sun);border-color:var(--sun);color:var(--selected-text)}
@@ -505,6 +505,16 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   --sea:#5CBDF0;
   --control-bg:rgba(13,18,26,.94);
   --compass-bg:rgba(10,16,23,.96);
+  --compass-card-bg:#0A1017;
+  --compass-card-border:rgba(170,215,244,.24);
+  --compass-water:#102F47;
+  --compass-land:#4B6377;
+  --compass-ring:#668DA7;
+  --compass-wave:#A3DFFF;
+  --compass-wave-muted:#76A4C1;
+  --compass-wind:#EEF5FA;
+  --compass-text:#EEF5FA;
+  --compass-sub:#A9BDD0;
   --hero-opacity:.12;
   --selected-text:#07121A;
 }
@@ -1076,21 +1086,21 @@ function compass(r, p){
     return '<line x1="'+sx+'" y1="'+sy+'" x2="'+bx+'" y2="'+by+'" stroke="'+col+'" stroke-width="3.4" stroke-linecap="round"/>'+
       '<polygon points="'+tx+','+ty+' '+(bx+nx*5)+','+(by+ny*5)+' '+(bx-nx*5)+','+(by-ny*5)+'" fill="'+col+'"/>';
   };
-  let s = '<svg viewBox="0 0 240 240" role="img" aria-label="波と風の向き。矢印の長さはすべて同じ"><circle cx="120" cy="120" r="84" fill="rgba(59,143,224,.16)" stroke="var(--line)"/>' +
-    '<path d="M'+x1+' '+y1+'A84 84 0 0 1 '+x2+' '+y2+'Z" fill="rgba(169,187,209,.24)"/>' +
-    '<text x="120" y="14" text-anchor="middle" font-size="12" fill="var(--sub)">北</text>'+
-    '<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="12" fill="var(--text)">陸</text>';
+  let s = '<svg viewBox="0 0 240 240" role="img" aria-label="波と風の向き。矢印の長さはすべて同じ"><circle cx="120" cy="120" r="84" fill="var(--compass-water)" stroke="var(--compass-ring)"/>' +
+    '<path d="M'+x1+' '+y1+'A84 84 0 0 1 '+x2+' '+y2+'Z" fill="var(--compass-land)"/>' +
+    '<text x="120" y="14" text-anchor="middle" font-size="12" fill="var(--compass-sub)">北</text>'+
+    '<text x="'+lx+'" y="'+(ly+4)+'" text-anchor="middle" font-size="12" fill="var(--compass-text)">陸</text>';
   // 波向は主要なうねりを代表表示。複数成分の太さ・長さに差を付けない。
   const wave = (r.comps||[]).filter(x => x[0]!=null && x[0]>=0.05 && x[2]!=null)
     .sort((a,b)=>(b[3]||0)-(a[3]||0))[0];
   if(wave){
-    const col=wave[3]/wave[0]>=0.6 ? '#F2B544' : '#7F93AD';
+    const col=wave[3]/wave[0]>=0.6 ? 'var(--compass-wave)' : 'var(--compass-wave-muted)';
     s+=arr(wave[2],col);
     const [tx,ty]=pt(wave[2],103);
     s+='<text x="'+tx+'" y="'+(ty+4)+'" text-anchor="middle" font-size="11" fill="'+col+'">波 '+fmt(wave[0],1)+'m</text>';
   }
-  if(r.dir!=null) s+=arr(r.dir,'var(--text)');
-  return s+'</svg><div class="legend"><span><i style="background:#F2B544"></i>波向（主要成分）</span><span><i style="background:var(--text)"></i>風向</span></div>'+
+  if(r.dir!=null) s+=arr(r.dir,'var(--compass-wind)');
+  return s+'</svg><div class="legend"><span><i style="background:var(--compass-wave)"></i>波向（主要成分）</span><span><i style="background:var(--compass-wind)"></i>風向</span></div>'+
     '<p class="note">矢印は向きだけを示します。長さは風速・波高に比例しません。</p>';
 }
 
@@ -1813,8 +1823,7 @@ function spotMap(p){
   if(p.lat==null || p.lon==null) return '<p class="note">このポイントの座標がありません。</p>';
   const src = 'https://www.google.com/maps?q=' + p.lat + ',' + p.lon + '&z=15&t=k&hl=' + (state.lang==='en'?'en':'ja') + '&output=embed';
   return '<iframe class="compass-map" title="' + p.name + '" data-src="' + src + '"' + ' src="' + src + '"' + ' loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>' +
-    (p.map_url ? '<p class="note"><a href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">Googleマップで開く ↗</a></p>' : '') +
-    '<p class="note">座標は参考位置です。</p>';
+    (p.map_url ? '<p class="note"><a href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">Googleマップで開く ↗</a></p>' : '');
 }
 function setCompassPane(v){
   state.cpane = v;
