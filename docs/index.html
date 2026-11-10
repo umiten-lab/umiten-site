@@ -735,7 +735,7 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .tb tr.past td[style]{background:var(--past-shade)!important}
 .tb tr.past td:first-child{background:var(--panel)!important}
 /* 時間帯の海は、波情報と同じ幅のヘッダー帯にだけ重ねる。 */
-:root,[data-theme="night"]{--hero-image-position:center 20%;--scene-opacity:.76}
+:root,[data-theme="night"]{--hero-image-position:center 5%;--scene-opacity:.76}
 [data-theme="sunrise"],[data-theme="sunset"]{--hero-image-position:center 75%;--scene-opacity:.8}
 [data-theme="daylight"]{--hero-image-position:center 17%;--scene-opacity:.7}
 [data-theme="midnight"]{--hero-image-position:center 22%;--scene-opacity:.82}
@@ -759,6 +759,16 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   pointer-events:none;
 }
 .hero > .wrap{z-index:1}
+[data-theme="sunrise"] .hero > img{
+  opacity:.86;
+  mix-blend-mode:normal;
+  filter:saturate(1.18) contrast(1.1);
+}
+[data-theme="daylight"] .hero > img{
+  opacity:.82;
+  filter:saturate(1.14) contrast(1.08);
+}
+[data-theme="night"] .hero > img{opacity:.82}
 @media (max-width:760px){
   .hero > img{width:calc(100% - 32px);max-width:calc(100% - 32px);height:142px;border-radius:0 0 16px 16px;opacity:calc(var(--scene-opacity,.78) * .72)}
 }
