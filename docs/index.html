@@ -734,30 +734,34 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .tb tr.past td:first-child{opacity:1;filter:none;color:var(--sub)}
 .tb tr.past td[style]{background:var(--past-shade)!important}
 .tb tr.past td:first-child{background:var(--panel)!important}
-/* 時間帯の海は、ヘッダー内の独立したカードとして見せる。 */
-:root,[data-theme="night"]{--hero-image-position:center 20%;--scene-opacity:.88}
-[data-theme="sunrise"],[data-theme="sunset"]{--hero-image-position:center 75%;--scene-opacity:.9}
-[data-theme="daylight"]{--hero-image-position:center 17%;--scene-opacity:.86}
-[data-theme="midnight"]{--hero-image-position:center 22%;--scene-opacity:.9}
+/* 時間帯の海は、波情報と同じ幅のヘッダー帯にだけ重ねる。 */
+:root,[data-theme="night"]{--hero-image-position:center 20%;--scene-opacity:.76}
+[data-theme="sunrise"],[data-theme="sunset"]{--hero-image-position:center 75%;--scene-opacity:.8}
+[data-theme="daylight"]{--hero-image-position:center 17%;--scene-opacity:.7}
+[data-theme="midnight"]{--hero-image-position:center 22%;--scene-opacity:.82}
 .hero > img{
-  top:22px;
-  left:auto;
-  right:calc((100% - 1120px) / 2 + 330px);
-  width:360px;
-  height:156px;
-  max-width:none;
+  top:0;
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
+  width:min(calc(100% - 48px),1120px);
+  height:220px;
+  max-width:calc(100% - 48px);
   object-fit:cover;
   object-position:var(--hero-image-position,center 55%);
-  opacity:var(--scene-opacity,.88);
-  filter:saturate(1.08) contrast(1.04);
-  border:1px solid var(--line);
-  border-radius:18px;
-  box-shadow:0 14px 32px rgba(0,0,0,.2);
-  -webkit-mask-image:none;
-  mask-image:none;
+  opacity:var(--scene-opacity,.78);
+  filter:saturate(1.06) contrast(1.03);
+  border:0;
+  border-radius:0 0 22px 22px;
+  box-shadow:none;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 68%,rgba(0,0,0,.68) 84%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0%,#000 68%,rgba(0,0,0,.68) 84%,transparent 100%);
   pointer-events:none;
 }
-@media (max-width:1150px){.hero > img{display:none}}
+.hero > .wrap{z-index:1}
+@media (max-width:760px){
+  .hero > img{width:calc(100% - 32px);max-width:calc(100% - 32px);height:142px;border-radius:0 0 16px 16px;opacity:calc(var(--scene-opacity,.78) * .72)}
+}
 /* スマホ: 円を大きく、地図は控えめに */
 @media (max-width:760px){
   .now .compass{width:100%;max-width:none;justify-self:stretch;box-sizing:border-box}
