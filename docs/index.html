@@ -424,7 +424,11 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .compass-tabs button[aria-pressed="true"]{background:var(--sun);border-color:var(--sun);color:var(--selected-text)}
 .compass-pane[hidden]{display:none}
 .compass-map{display:block;width:100%;height:210px;margin-top:10px;border:0;border-radius:10px;background:rgba(127,147,173,.15)}
-.compass-pane .note a{color:var(--sun)}
+.spot-map-card{margin-top:18px;max-width:720px}
+.spot-map-card .compass-map{height:300px;margin-top:0;border:1px solid var(--line)}
+.spot-map-card .note{font-size:11px;line-height:1.5;margin:8px 0 0;color:var(--sub)}
+.spot-map-card .note a{color:var(--sun)}
+@media (max-width:760px){.spot-map-card .compass-map{height:240px}}
 .now .stats{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));max-width:none;width:100%;gap:9px;padding:12px 0 0;margin:0;border-top:1px solid var(--line)}
 .now .stats > div{min-width:0}
 .now .stats dt{font-size:11px;gap:5px}
@@ -748,6 +752,13 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
     object-position: center 45%;
     opacity: var(--hero-opacity, .24);
   }
+}
+/* スマホ: 円を大きく、地図は控えめに */
+@media (max-width:760px){
+  .now .compass{width:100%;max-width:none;justify-self:stretch;box-sizing:border-box}
+  .now .compass svg{width:min(270px,76vw);height:min(270px,76vw)}
+  .spot-map-card{margin-top:12px}
+  .spot-map-card .compass-map{height:150px}
 }
 </style>
 </head>
@@ -1385,10 +1396,10 @@ function view(p, rows){
   const week = ds.map((d,i) => { const dt = daytime(d.rows), mx = dt.reduce((m,x) => x.a != null && x.a > m ? x.a : m, 0), b = bestRecommendation(d.rows, now), ref = dailyRatingRow(d.rows), rated = b || ref;
     const status = b ? 'おすすめ ' + hourOf(b.t) + '時・' + boardScore(b) + '点' : 'おすすめ枠なし' + (ref ? '／' + (isSafeDaylightHour(ref) ? '日中最高' : '参考') + ' ' + boardScore(ref) + '点' : '／予報データなし');
     return '<button class="day" data-day="' + i + '" aria-pressed="' + (i === di) + '"><span>' + dayLabel(d.date) + '</span><b>' + sz(mx) + '</b>' + scoreBadge(boardScore(rated), 'day') + expertFlag(mx, 'mini') + spark(dt, wk, i === di) + '<span>' + status + '</span></button>'; }).join('');
-  return '<div class="wrap"><h2 class="current-conditions-heading"><span class="current-conditions-dot" aria-hidden="true"></span><span>' + forecastTime(r.t) + '</span><small>波・風・潮位の予報</small></h2><section class="now"><div><p class="lead"><span class="forecast-lead-title">' + p.name + ' の予報</span><span class="forecast-lead-detail">' + forecastTime(r.t) + '' + '</span></p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now), r.t.slice(11,16)) + expertFlag(r.a, 'inline') +
+  return '<div class="wrap"><h2 class="current-conditions-heading"><span class="current-conditions-dot" aria-hidden="true"></span><span>' + forecastTime(r.t) + '</span><small>波・風・潮位の予報</small></h2><section class="now"><div><p class="lead"><span class="forecast-lead-title">' + p.name + ' の予報</span><span class="forecast-lead-detail">' + forecastTime(r.t) + '' + '</span></p><div class="big"><p class="size">' + sz(r.a) + '</p></div>' + scoreBadge(boardScore(r), 'hero', adviceFor(r, rows, now), r.t.slice(11,16)) + expertFlag(r.a, 'inline') + '<div class="spot-map-card">' + spotMap(p) + '</div>' +
     '<dl class="stats"><div><dt>' + statIcon('shore') + '岸の波高</dt><dd>' + fmt(r.a,1) + 'm</dd></div><div><dt>' + statIcon('offshore') + '沖の波高</dt><dd>' + fmt(r.h,1) + 'm</dd></div><div><dt>' + statIcon('period') + '周期</dt><dd>' + fmt(r.per,0) + '秒</dd></div>' +
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
-    '<div class="compass">' + '' + '<div class="compass-pane" data-pane="dir"' + (state.cpane==='map'?' hidden':'') + '>' + compass(r, p) + '</div><div class="compass-pane" data-pane="map"' + '' + '>' + spotMap(p) + '</div></div></section></div>|SPLIT|' +
+    '<div class="compass">' + '' + '<div class="compass-pane" data-pane="dir"' + (state.cpane==='map'?' hidden':'') + '>' + compass(r, p) + '</div></div></section></div>|SPLIT|' +
     '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
     '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading') + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
