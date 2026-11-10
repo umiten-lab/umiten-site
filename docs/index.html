@@ -734,54 +734,30 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 .tb tr.past td:first-child{opacity:1;filter:none;color:var(--sub)}
 .tb tr.past td[style]{background:var(--past-shade)!important}
 .tb tr.past td:first-child{background:var(--panel)!important}
-/* ------------------------------------------------------------
- * 海点：波の写真はブランドヘッダーだけに使用する。
- *
- * 以前は背景写真が .hero 全体（現在の波予報・採点・方位図）まで
- * 続いており、とくにナイトで文字と写真の波模様が重なっていた。
- * 写真の表示領域をロゴ近辺に限定し、下端を透過で自然にぼかす。
- * これにより、予報値は各テーマの落ち着いた背景色の上で読む。
- * HTML / Python / 採点・言語切替などの挙動は変更しない。
- * ------------------------------------------------------------ */
-.hero > img {
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  height: 195px; /* PC の大きなロゴまで見せる */
-  max-height: none;
-  object-fit: cover;
-  object-position: var(--hero-image-position, center 55%);
-  opacity: var(--hero-opacity, .24);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 32%, rgba(0,0,0,.55) 64%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 32%, rgba(0,0,0,.55) 64%, transparent 100%);
-  -webkit-mask-composite: initial;
-  mask-composite: add;
-  pointer-events: none;
+/* 時間帯の海は、ヘッダー内の独立したカードとして見せる。 */
+:root,[data-theme="night"]{--hero-image-position:center 20%;--scene-opacity:.88}
+[data-theme="sunrise"],[data-theme="sunset"]{--hero-image-position:center 75%;--scene-opacity:.9}
+[data-theme="daylight"]{--hero-image-position:center 17%;--scene-opacity:.86}
+[data-theme="midnight"]{--hero-image-position:center 22%;--scene-opacity:.9}
+.hero > img{
+  top:22px;
+  left:auto;
+  right:calc((100% - 1120px) / 2 + 330px);
+  width:360px;
+  height:156px;
+  max-width:none;
+  object-fit:cover;
+  object-position:var(--hero-image-position,center 55%);
+  opacity:var(--scene-opacity,.88);
+  filter:saturate(1.08) contrast(1.04);
+  border:1px solid var(--line);
+  border-radius:18px;
+  box-shadow:0 14px 32px rgba(0,0,0,.2);
+  -webkit-mask-image:none;
+  mask-image:none;
+  pointer-events:none;
 }
-@media (max-width: 760px) {
-  .hero > img {
-    height: 122px; /* スマホはロゴの行を中心にして予報本文にかけない */
-    object-position: var(--hero-image-position-mobile, var(--hero-image-position, center 55%));
-    opacity: var(--hero-opacity, .24);
-  }
-}
-/* 時間帯ごとの海。左側はロゴの余白、右側に太陽・月・波を置く。 */
-:root,[data-theme="night"]{--hero-image-position:center 20%;--hero-image-position-mobile:center 30%}
-[data-theme="sunrise"],[data-theme="sunset"]{--hero-image-position:center 75%;--hero-image-position-mobile:center 74%}
-[data-theme="daylight"]{--hero-image-position:center 17%;--hero-image-position-mobile:center 25%}
-[data-theme="midnight"]{--hero-image-position:center 22%;--hero-image-position-mobile:center 31%}
-[data-theme="sunrise"] .hero>img{opacity:.32;mix-blend-mode:normal}
-[data-theme="daylight"] .hero>img{opacity:.22}
-[data-theme="sunset"] .hero>img{opacity:.28}
-:root .hero>img,[data-theme="night"] .hero>img{opacity:.27}
-[data-theme="midnight"] .hero>img{opacity:.29}
-@media (max-width:760px){
-  /* 右上の言語・テーマ操作を避け、時間帯の主役をロゴの右隣に寄せる。 */
-  [data-theme="sunrise"] .hero>img,[data-theme="sunset"] .hero>img,[data-theme="midnight"] .hero>img{width:175%!important;left:auto!important;right:0!important}
-  [data-theme="daylight"] .hero>img,[data-theme="night"] .hero>img{width:270%!important;left:auto!important;right:0!important}
-  [data-theme="daylight"],[data-theme="night"]{--hero-image-position-mobile:center 0%}
-}
+@media (max-width:1150px){.hero > img{display:none}}
 /* スマホ: 円を大きく、地図は控えめに */
 @media (max-width:760px){
   .now .compass{width:100%;max-width:none;justify-self:stretch;box-sizing:border-box}
@@ -1718,13 +1694,6 @@ function switchLanguage(language){
 
 function render(){
   const p = POINTS[state.pi], rows = state.data[p.id];
-  const mobileHeroStyle = window.innerWidth <= 760
-    ? (state.theme === 'daylight' || state.theme === 'night'
-      ? ' style="width:270%;max-width:none;left:auto;right:0;object-position:center 0%"'
-      : state.theme === 'midnight'
-        ? ' style="width:175%;max-width:none;left:auto;right:0;object-position:center 15%"'
-        : ' style="width:175%;max-width:none;left:auto;right:0"')
-    : '';
   const themePicker = '<div class="theme-picker"><select id="theme-select" aria-label="表示テーマ">' +
     [['sunrise','サンライズ'],['daylight','デイライト'],['sunset','サンセット'],['night','ナイト'],['midnight','ミッドナイト']].map(([v,l]) => '<option value="' + v + '"' + (state.theme===v ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>';
   const tabs = '<nav class="tabs" aria-label="ポイント">' + POINTS.map((q,i) => '<button data-point="' + i + '" aria-pressed="' + (i === state.pi) + '">' + q.name + '</button>').join('') + '</nav>' +
@@ -1735,7 +1704,7 @@ function render(){
   if(state.err) parts[0] = '<div class="wrap"><p class="msg">データを取得できませんでした。<br>' + state.err + '</p></div>';
   else if(!rows) parts[0] = '<div class="wrap"><p class="msg">波のデータを取得中です…</p></div>';
   else parts = view(p, rows).split('|SPLIT|');
-  app.innerHTML = '<div class="hero"><img src="' + (HERO_IMAGES[state.theme] || WAVE) + '" alt=""' + mobileHeroStyle + '><div class="wrap"><div class="top"><img class="logo" src="' + (UMITEN_LOGOS[state.theme] || UMITEN_LOGOS.night) + '" alt="海点 UMITEN"><div class="top-controls"><div class="language-switch" role="group" aria-label="表示言語"><button type="button" data-lang="ja" aria-pressed="' + (state.lang==="ja") + '">日本語</button><button type="button" data-lang="en" aria-pressed="' + (state.lang==="en") + '">English</button></div>' + themePicker + '</div></div>' + tabs + '</div>' + parts[0] + '</div>' + (parts[1] || '');
+  app.innerHTML = '<div class="hero"><img src="' + (HERO_IMAGES[state.theme] || WAVE) + '" alt=""><div class="wrap"><div class="top"><img class="logo" src="' + (UMITEN_LOGOS[state.theme] || UMITEN_LOGOS.night) + '" alt="海点 UMITEN"><div class="top-controls"><div class="language-switch" role="group" aria-label="表示言語"><button type="button" data-lang="ja" aria-pressed="' + (state.lang==="ja") + '">日本語</button><button type="button" data-lang="en" aria-pressed="' + (state.lang==="en") + '">English</button></div>' + themePicker + '</div></div>' + tabs + '</div>' + parts[0] + '</div>' + (parts[1] || '');
   // スマホは現在位置が横スクロールの外に隠れないよう、横方向だけ移動する。
   scrollChartsToNow();
   const nowPanel=app.querySelector('.now');
