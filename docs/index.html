@@ -750,9 +750,8 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   object-fit:cover;
   object-position:var(--hero-image-position,center 55%);
   opacity:var(--scene-opacity,.78);
-  filter:saturate(1.06) contrast(1.03);
   border:0;
-  border-radius:0 0 22px 22px;
+  border-radius:0;
   box-shadow:none;
   -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 68%,rgba(0,0,0,.68) 84%,transparent 100%);
   mask-image:linear-gradient(to bottom,#000 0%,#000 68%,rgba(0,0,0,.68) 84%,transparent 100%);
@@ -762,15 +761,16 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
 [data-theme="sunrise"] .hero > img{
   opacity:.86;
   mix-blend-mode:normal;
-  filter:saturate(1.18) contrast(1.1);
 }
 [data-theme="daylight"] .hero > img{
   opacity:.82;
-  filter:saturate(1.14) contrast(1.08);
 }
 [data-theme="night"] .hero > img{opacity:.82}
+[data-theme="midnight"] .hero > img{
+  opacity:.88;
+}
 @media (max-width:760px){
-  .hero > img{width:calc(100% - 32px);max-width:calc(100% - 32px);height:142px;border-radius:0 0 16px 16px;opacity:calc(var(--scene-opacity,.78) * .72)}
+  .hero > img{width:calc(100% - 32px);max-width:calc(100% - 32px);height:142px;border-radius:0;opacity:calc(var(--scene-opacity,.78) * .72)}
 }
 /* スマホ: 円を大きく、地図は控えめに */
 @media (max-width:760px){
