@@ -796,6 +796,21 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .compass-group .compass .note{margin:4px 0 0;font-size:9px;line-height:1.35}
   .compass-group .spot-map-card .compass-map{flex:none;height:150px;min-height:0}
 }
+/* Windy の公式埋め込み。選択中ポイントの座標で風レイヤーを表示する。 */
+.windy-section{margin:18px 0 0}
+.windy-section h2{margin:0 0 10px}
+.windy-map{display:block;width:100%;height:380px;border:0;border-radius:16px;background:var(--panel)}
+@media(max-width:760px){
+  /* 操作しやすさを残しつつ、予報を縦に長くしすぎない。 */
+  h2{margin:24px 0 8px}
+  .now{gap:12px;padding-top:8px;padding-bottom:20px}
+  .compass-group .compass svg{max-width:132px}
+  .compass-group .spot-map-card .compass-map{height:132px}
+  .date-navigation--footer{margin:10px 0 20px;padding:8px 9px}
+  .windy-section{margin-top:14px}
+  .windy-section h2{margin:0 0 8px}
+  .windy-map{height:288px;border-radius:12px}
+}
 </style>
 </head>
 <body>
@@ -1437,7 +1452,7 @@ function view(p, rows){
     '<div><dt>' + statIcon('wind') + '風</dt><dd>' + fmt(r.spd,1) + 'm/s' + (r.kind ? '<span class="kind ' + kindCls(r.kind) + '">' + KIND[r.kind] + '</span>' : '') + '</dd></div><div><dt>' + statIcon('tide') + '潮位</dt><dd>' + tide + '</dd></div><div><dt>' + statIcon('temp') + '水温</dt><dd>' + fmt(r.sst,1) + '℃</dd></div></dl></div>' +
     '<div class="compass-group"><div class="spot-map-card">' + spotMap(p) + '</div><div class="compass">' + compass(r, p) + '</div></div></section></div>|SPLIT|' +
     '<div class="wrap"><div class="top-insights">' + recommendView(ds[di].rows, now) + wetsuitCard(ds[di].rows, ds[di].date, now) + '</div><h2>1週間の見通し</h2>' + scoreGuide() + '<div class="week">' + week + '</div>' + '<h2 class="series-heading" id="wave-series-heading" tabindex="-1">波・風の時系列 <span class="date-label">' + selectedDate + '</span><small class="n">面の状態は連続色で表示</small></h2>' + dayNavigation(ds,di) + '<p class="date-swipe-hint">時系列の左右端からさらにスワイプすると、前日・翌日の予報へ切り替わります。</p><div class="panel" data-day-swipe="wave-series-heading" aria-label="波と風の時系列、左右端からスワイプで予報日切り替え">' + dateMark + '<p class="scroll-hint">← 時間をスワイプ ／ 端からさらにスワイプで日付切替 →</p><div class="series-key"><span>波：岸の波高</span><span>青線：潮位</span><span>下段：風・面・周期・波向・評価</span></div>' + faceLegend() + '<div class="chart">' + chart(ds[di].rows, now) + cells(ds[di].rows) + '</div></div>' +
-    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading') + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) +
+    '<h2 class="series-heading" id="tide-series-heading" tabindex="-1">潮位の時系列 <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="tide-series-heading">' + dateMark + tideLunarPanel(ds[di].date) + '<div class="series-key">潮位の推移（平均海面基準・モデル値）</div>' + tideChart(ds[di].rows, now) + '</div>' + dayNavigation(ds,di,true,'tide-series-heading') + '<h2 class="series-heading" id="hourly-detail-heading" tabindex="-1">時間別の詳細（2時間ごと） <span class="date-label">' + selectedDate + '</span></h2><div class="panel" data-day-swipe="hourly-detail-heading">' + dateMark + table(ds[di].rows) + '</div>' + dayNavigation(ds,di,true) + windyWind(p) +
     '<h2>天気・実測を見る(気象庁・国土交通省のサイトへ)</h2><div class="links">' + LINKS.map(l => '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>').join('') + '</div>' + sourcePanel(p) + '</div>';
 }
 
@@ -1530,7 +1545,7 @@ const LANG_TEXT_EN = {
  '矢印は向きだけを示します。長さは風速・波高に比例しません。':'Arrows indicate direction only; length does not represent wind speed or wave height.',
  '波のサイズ（スネからオーバーヘッド）と潮位の時間ごとのグラフ':'Hourly nearshore wave size and tide chart',
  '波と風の向き。矢印の長さはすべて同じ':'Wave and wind directions. Arrows are equal length',
- '潮位のグラフ':'Tide chart','向き':'Direction','地図':'Map','Googleマップで開く ↗':'Open in Google Maps ↗','座標は参考位置です。':'Coordinates are approximate.',
+ '潮位のグラフ':'Tide chart','向き':'Direction','地図':'Map','Googleマップで開く ↗':'Open in Google Maps ↗','Windy の風情報':'Windy wind map',
  '面の状態は連続色で表示':'Surface quality shown as a color gradient',
  '面の状態の連続色目盛り。左は乱れた面、右はきれいな面':'Surface quality scale from choppy to clean',
  '面の整い度':'Surface cleanliness', '不明':'Unknown',
@@ -1824,6 +1839,12 @@ function spotMap(p){
   const src = 'https://www.google.com/maps?q=' + p.lat + ',' + p.lon + '&z=15&t=k&hl=' + (state.lang==='en'?'en':'ja') + '&output=embed';
   return '<iframe class="compass-map" title="' + p.name + '" data-src="' + src + '"' + ' src="' + src + '"' + ' loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>' +
     (p.map_url ? '<p class="note"><a href="' + p.map_url + '" target="_blank" rel="noopener noreferrer">Googleマップで開く ↗</a></p>' : '');
+}
+function windyWind(p){
+  if(p.lat==null || p.lon==null) return '';
+  const src = 'https://embed.windy.com/embed.html?type=map&location=coordinates&metricWind=m%2Fs&zoom=10&overlay=wind&product=ecmwf&level=surface&lat=' + p.lat + '&lon=' + p.lon + '&message=true';
+  return '<section class="windy-section" aria-labelledby="windy-heading"><h2 id="windy-heading">Windy の風情報</h2>' +
+    '<iframe class="windy-map" title="Windy wind map for ' + p.name + '" src="' + src + '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></section>';
 }
 function setCompassPane(v){
   state.cpane = v;
