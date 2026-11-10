@@ -1842,7 +1842,7 @@ function spotMap(p){
 }
 function windyWind(p){
   if(p.lat==null || p.lon==null) return '';
-  const src = 'https://embed.windy.com/embed.html?type=map&location=coordinates&metricWind=m%2Fs&zoom=10&overlay=wind&product=ecmwf&level=surface&lat=' + p.lat + '&lon=' + p.lon + '&message=true';
+  const src = 'https://embed.windy.com/embed.html?type=map&location=coordinates&metricWind=m%2Fs&zoom=14&overlay=wind&product=ecmwf&level=surface&lat=' + p.lat + '&lon=' + p.lon + '&message=true';
   return '<section class="windy-section" aria-labelledby="windy-heading"><h2 id="windy-heading">Windy の風情報</h2>' +
     '<iframe class="windy-map" title="Windy wind map for ' + p.name + '" src="' + src + '" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></section>';
 }
