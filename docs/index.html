@@ -772,8 +772,18 @@ button[aria-pressed="true"],.board-switch .board-buttons button[aria-pressed="tr
   .compass-group .spot-map-card{flex:1;width:auto;min-width:0}
 }
 @media (max-width:760px){
-  .compass-group{flex-direction:column-reverse;gap:12px}
-  .compass-group .compass{flex:none}
+  /* 円グラフと地図を、iPhone幅でも同じ行に収める。 */
+  .compass-group{flex-direction:row;gap:8px;align-items:stretch;min-width:0}
+  .compass-group .spot-map-card{flex:1 1 0;width:auto;min-width:0}
+  .compass-group .compass{
+    flex:1 1 0;width:auto;min-width:0;padding:8px;display:flex;
+    flex-direction:column;justify-content:flex-start;
+  }
+  .compass-group .compass svg{
+    width:100%;height:auto;max-width:150px;margin:0 auto;
+  }
+  .compass-group .compass .legend{gap:3px 6px;margin:4px 0 0;font-size:9px}
+  .compass-group .compass .note{margin:4px 0 0;font-size:9px;line-height:1.35}
   .compass-group .spot-map-card .compass-map{flex:none;height:150px;min-height:0}
 }
 </style>
